@@ -1,5 +1,7 @@
 
+from collections.abc import Iterable
 from GeekyGadgets.Globals import *
+from GeekyGadgets.TypeHinting import *
 
 _E = TypeVar("_E")
 
@@ -16,6 +18,58 @@ if PYTHON_VERSION < (3, 12):
 				yield ret
 else:
 	from itertools import batched as Batched
+from itertools import chain as Chain
+
+class ChainChain(Chain):
+	def __init__(self, *iterables: Iterable) -> None:
+		super().__init__(*(Chain(iterable) for iterable in iterables))
+
+_T1 = TypeVar("_T1")
+_T2 = TypeVar("_T2")
+
+class Grouper(Subscriptable): pass
+class Grouper(Subscriptable):
+	"""Groups values of an iterable according to their value or the value returned when passed to the function given 
+	as `key`. When the set of possible/expected keys are known, they can be specified (order-specific) using 
+	the `keys` argument."""
+
+	
+
+	@overload
+	def __init__(self, iterable: Iterable[_T1]) -> Grouper[_T1, _T1]: ...
+	@overload
+	def __init__(self, iterable: Iterable[_T1], key: Callable[[_T1], _T2]) -> Grouper[_T1, _T2]: ...
+	@overload
+	def __init__(self, iterable: Iterable[_T1], keys: Iterable[_T1]) -> Grouper[_T1, _T1]: ...
+	@overload
+	def __init__(self, iterable: Iterable[_T1], key: Callable[[_T1], _T2], keys: Iterable[_T2]) -> Grouper[_T1, _T2]: ...
+	def __init__(self, iterable, key=None, keys=None):
+		"""The `Grouper.keys` are set/determined by iterating the iterable at instantiation, and not when iterated. If 
+		an *Iterator* is passed as `iterable`, a `tuple` is created from it and saved instead of the iterator. When `keys` is excluded, the keys created are sorted using `sorted()` """
+		
+		if isinstance(iterable, Iterator):
+			self.iterable = tuple(iterable)
+		elif isinstance(iterable, Iterable):
+			self.iterable = iterable
+		else:
+			iter(iterable)
+			self.iterable = iterable
+		self.key = key or (lambda x:x)
+		if keys is None:
+			self.keys = sorted(set(map(self.key, iterable)), reverse=True)
+		else:
+			self.keys = list(reversed(tuple(keys)))
+	
+	def __next__(self):
+		if not self.keys:
+			raise StopIteration()
+		
+		currentKey = self.keys.pop()
+		
+		return tuple(filter(lambda x:self.key(x) == currentKey, self.iterable))
+			
+			
+		
 
 class Walker(Iterator):
 	"""Iterator that iterates in-order through an iterable and down through all their iterable elements. Going all the

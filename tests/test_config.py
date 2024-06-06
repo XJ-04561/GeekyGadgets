@@ -53,9 +53,11 @@ def test_methods():
 	
 	config1 = loadTOML(os.path.join("tests", "tomlExample.toml"))
 	
-	from tomlExample import config as config2
+	from tomlExample import config as _config
+	from copy import deepcopy
+	config3 = deepcopy(_config)
 
-	config3 = Config.fromDict(config2)
+	config2 = Config.fromDict(config3)
 
 	config3["new_section"] = Category()
 	
@@ -66,12 +68,21 @@ def test_methods():
 	assert config2 == config3
 
 	config2["new_section.value"] = 2
-	config3["new_section.other_value"] = 6
+
+	assert config2.get("new_section.other_value") == None
+
+	config3["new_section"]["other_value"] = 6
+
+	assert config2.get("new_section.other_value") == None
 
 	assert config2 != config3
 	
 	config2.update(config3)
 	
+	assert config2 != config3
+
+	config3.update(config2)
+
 	assert config2 == config3
 
 def test_operators():
@@ -81,9 +92,11 @@ def test_operators():
 	
 	config1 = loadTOML(os.path.join("tests", "tomlExample.toml"))
 	
-	from tomlExample import config as config2
+	from tomlExample import config as _config
+	from copy import deepcopy
+	config3 = deepcopy(_config)
 
-	config3 = Config.fromDict(config2)
+	config2 = Config.fromDict(config3)
 
 	assert config1 | config1 == config1
 	assert config2 | config2 == config2
@@ -100,10 +113,13 @@ def test_operators():
 	assert config2 | config3 != config3
 	assert config3 | config2 != config3
 	
+	print(config2 | config3)
+	print(type(config2 | config3))
+
 	assert config2 | config3 == config2
 	assert config3 | config2 == config2
 
-	config3["new_section.other_value"] = 6
+	config3["new_section"]["other_value"] = 6
 	
 	assert config2 | config3 != config3
 	assert config3 | config2 != config3

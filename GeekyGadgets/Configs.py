@@ -8,6 +8,7 @@ else:
 _NOT_SET = object()
 _NO_DEFAULT = object()
 _NOT_FOUND = object()
+_NO_TYPE = type("_NO_TYPE", (), {})
 _D = TypeVar("_D", bound=dict[str,Any])
 
 class FlagNotFound(KeyError):
@@ -86,11 +87,7 @@ class Config(dict):
 
 	def __init__(self, iterable=_NOT_SET, /, **kwargs):
 
-		if not isinstance(self, self.CATEGORY_CLASS):
-			self._LOCK = threading.Lock()
-		else:
-			from GeekyGadgets.Threads import DummyLock
-			self._LOCK = DummyLock()
+		self._LOCK = threading.RLock()
 
 		if iterable is not _NOT_SET and (tuple(kwargs) != ("default",) and kwargs):
 			super().__init__(iterable, **kwargs)
@@ -111,18 +108,24 @@ class Config(dict):
 	@overload
 	def fromDict(cls : type["Category"], d : dict, *, default : Any) -> "Category": ...
 	@classmethod
-	def fromDict(cls, d, *, default=_NO_DEFAULT):
+	def fromDict(cls, d, *, default=_NO_DEFAULT, obj : "Config"=None):
 		"""Converts a dict to a `Config` object, with all underlying dictionaries being converted 
 		to `Category` objects."""
-		obj = cls((), default=default)
+		if obj is None:
+			obj = cls((), default=default)
+		categoryType = getattr(d, "CATEGORY_CLASS", dict)
 		if isinstance(d, Dict):
 			iterator = d.items()
+		elif isinstance(d, Iterator):
+			iterator = d
 		else:
 			iterator = iter(d)
 
 		for name, value in iterator:
-			if isinstance(value, Dict):
-				obj[name] = obj.CATEGORY_CLASS.fromDict(value, default=default)
+			if isinstance(value, categoryType):
+				if name not in obj or not isinstance(obj[name], obj.CATEGORY_CLASS):
+					obj[name] = obj.CATEGORY_CLASS((), default=obj._DEFAULT)
+				obj.CATEGORY_CLASS.fromDict(value, default=obj._DEFAULT, obj=obj[name])
 			else:
 				obj[name] = value
 		
@@ -160,9 +163,8 @@ class Config(dict):
 			elif flag in self.main:
 				return super().__getitem__(flag)
 			else:
-				from GeekyGadgets.Iterators import ConfigWalker
 				res = {}
-				for root, name, value in self:
+				for root, name, value in self.walk():
 					if name == flag:
 						res[root] = value
 				if len(res) == 1:
@@ -186,7 +188,7 @@ class Config(dict):
 			if "." in flag:
 				first, rest = flag.split(".", 1)
 				if first not in self.main:
-					self[first] = self.CATEGORY_CLASS((), default=self._DEFAULT)
+					super().__setitem__(first, self.CATEGORY_CLASS((), default=self._DEFAULT))
 				
 				self[first][rest] = value
 				# Should raise case-specific exception. If self[first] is a list, TypeError will be raised, if self[first]
@@ -195,66 +197,57 @@ class Config(dict):
 				super().__setitem__(flag, value)
 
 	def __str__(self):
-		with self._LOCK:
-			return f"{{{', '.join(map(lambda x:': '.join(map(repr, x)), self.items()))}}}"
+		return f"{{{', '.join(map(lambda x:': '.join(map(repr, x)), self.items()))}}}"
 	
 	def __repr__(self):
-		with self._LOCK:
-			return str(self)
+		return str(self)
 
-	def __iter__(self) -> "ConfigWalker":
+	def walk(self) -> "ConfigWalker":
 		from GeekyGadgets.Iterators import ConfigWalker
 		return ConfigWalker(self)
 	
 	def __getattr__(self, name : str):
 		"""Returns the results of `self[name]`"""
-		return self[name]
+		with self._LOCK:
+			if name in self.walk():
+				return self[name]
+			else:
+				return self.__getattribute__(name) # Called to raise appropriate error.
 	
 	def __or__(self, other : dict):
 		if not isinstance(other, dict):
 			return NotImplemented
 		
-		out = type(self)(self.items(), default=self._DEFAULT)
-		for name, value in other.items():
-			if isinstance(out.get(name, _NOT_FOUND), self.CATEGORY_CLASS) and isinstance(value, dict):
-				out[name] = out[name] | value
-			else:
-				out[name] = value
-		
-		return out
+		obj = self.fromDict(self, default=self._DEFAULT)
+		self.fromDict(other, obj=obj)
+
+		return obj
 	
 	def __ror__(self, other : dict):
 		if not isinstance(other, dict):
 			return NotImplemented
 		
-		if isinstance(other, Config):
-			return other | self
-		else:
-			return self.fromDict(other, default=self._DEFAULT) | self
+		obj = self.fromDict(other, default=getattr(other, "_DEFAULT", self._DEFAULT))
+		self.fromDict(self, obj=obj)
+
+		return obj
 	
 	def __ior__(self, other : dict):
 		if not isinstance(other, dict):
 			return NotImplemented
 		
-		for name, value in other.items():
-			if isinstance(self.get(name, _NOT_FOUND), self.CATEGORY_CLASS) and isinstance(value, dict):
-				self[name] |= value
-			else:
-				self[name] = value
-	
-	def update(self, other : dict):
-		for name, value in other.items():
-			if name not in self:
-				if not isinstance(value, dict):
-					self[name] = value
-				else:
-					self[name] = self.CATEGORY_CLASS((), default=self._DEFAULT)
-					self[name].update(value)
-			elif isinstance(value, dict) and isinstance(self[name], self.CATEGORY_CLASS):
-				self[name] = self.CATEGORY_CLASS((), default=self._DEFAULT)
-				self[name].update(value)
-			else:
-				self[name] = value
+		self.fromDict(other, obj=self)
+
+		return self
+
+	def update(self, other : dict=_NOT_SET, **kwargs):
+		if isinstance(other, dict):
+			self |= other
+		elif other is not _NOT_SET:
+			self |= dict(other)
+		
+		if kwargs:
+			self.update(kwargs)
 	
 	def get(self : "Config", flag : str, default=_NO_DEFAULT, /) -> Any:
 		"""Attempts config[key] and if flag is not found, will first try to return the default value keyword argument. 
@@ -262,15 +255,15 @@ class Config(dict):
 		set, then None is returned."""
 		if "." in flag:
 			first, rest = flag.split(".", 1)
-
-			if first in self.main and isinstance(self[first], self.CATEGORY_CLASS):
-				return self[first].get(rest, default=default)
-			elif default is not _NO_DEFAULT:
-				return default
-			elif self._DEFAULT is not _NO_DEFAULT:
-				return self._DEFAULT
-			else:
-				return None
+			with self._LOCK:
+				if first in self.main and isinstance(self[first], self.CATEGORY_CLASS):
+					return self[first].get(rest, default)
+				elif default is not _NO_DEFAULT:
+					return default
+				elif self._DEFAULT is not _NO_DEFAULT:
+					return self._DEFAULT
+				else:
+					return None
 		else:
 			return super().get(flag, default if default is not _NO_DEFAULT else \
 									self._DEFAULT if self._DEFAULT is not _NO_DEFAULT else None)
@@ -278,9 +271,12 @@ class Config(dict):
 	def setdefault(self, flag, default=None):
 		if "." in flag:
 			first, *rest = flag.split(".", 1)
-			if first not in self.main:
-				self[first] = self.CATEGORY_CLASS((), default=self._DEFAULT)
-			self[first].setdefault(rest, default)
+			with self._LOCK:
+				if first in self.main:
+					self[first].setdefault(rest, default)
+				else:
+					self[first] = self.CATEGORY_CLASS((), default=self._DEFAULT)
+					self[first].setdefault(rest, default)
 		else:
 			super().setdefault(flag, default)
 
