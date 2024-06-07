@@ -5,6 +5,7 @@ from collections import UserDict
 import re, threading, time, sys, logging, os, types
 from timeit import default_timer as timer
 from functools import cached_property
+from io import BufferedWriter
 
 class Number: pass
 Number = int|float|complex
