@@ -4,6 +4,8 @@ from GeekyGadgets.Logging import Logged
 from GeekyGadgets.Formatting import callFormat
 from GeekyGadgets.Threads import *
 from GeekyGadgets.Threads import current_thread
+from GeekyGadgets.SpecialTypes import LimitedDict
+from GeekyGadgets.Functions import forceHash
 
 __all__ = ("UninitializedError", "Default", "ClassProperty", "CachedClassProperty", "ThreadMethod", "ThreadFunction", "ThreadDescriptor")
 
@@ -152,14 +154,12 @@ class CachedClassProperty:
 	def __repr__(self):
 		return f"{object.__repr__(self)[:-1]} name={self.name!r}>"
 
-class ThreadDescriptor(function, Logged):
+class ThreadDescriptor(Logged):
 
 	func : FunctionType | MethodType
+	wrapper : function
 	owner : object
-
-	def __init__(self, func, owner=None):
-		self.func = func
-		self.owner = owner
+	threadListLock : Lock
 	
 	def __call__(self, *args, **kwargs):
 		
@@ -172,6 +172,7 @@ class ThreadDescriptor(function, Logged):
 
 		self.LOG.info(f"Started thread for {callFormat(self.func, args, kwargs)}")
 		return thread
+		
 	def __repr__(self):
 		return f"<{self.__class__.__name__}({self.func}) at {hex(id(self))}>"
 	
@@ -191,17 +192,54 @@ class ThreadDescriptor(function, Logged):
 
 	def wait(self):
 		self.owner.wait()
-	
+
 class ThreadMethod(ThreadDescriptor):
 
 	func : MethodType
+	threads : ThreadGroup
 
 class ThreadFunction(ThreadDescriptor):
 	
 	func : FunctionType
+	methods : dict
+
+	def __new__(cls, func, owner=None):
+		obj = super().__new__(cls)
+		obj.methods = dict()
+		obj.func = func
+		obj.owner = owner
+
+		def _thread_call_wrapper(*args, **kwargs):
+			return obj(*args, **kwargs)
+		update_wrapper(_thread_call_wrapper, func)
+		obj.wrapper = _thread_call_wrapper
+		return _thread_call_wrapper
 	
 	def __get__(self, instance, owner=None):
 		if instance is not None:
-			return ThreadMethod(self.func.__get__(instance), instance)
+			self.methods[forceHash(instance)] = ThreadMethod(self.func.__get__(instance), instance)
+			return self.methods[forceHash(instance)]
 		else:
-			return ThreadMethod(self.func.__get__(owner), owner)
+			self.methods[forceHash(owner)] = ThreadMethod(self.func.__get__(owner), owner)
+			return self.methods[forceHash(owner)]
+
+def _thread_catch_wrapper(LOG : logging.Logger, future : Future, func : Callable, args : tuple, kwargs : dict[str,Any]):
+	try:
+		future.realize(func(*args, **kwargs))
+	except Exception as e:
+		e.add_note(f"This exception occured in thread: {current_thread()}")
+		LOG.exception(e)
+
+def threaded(func, threadGroup : type[ThreadGroup]=ThreadGroup):
+	from GeekyGadgets.Threads import Thread, ThreadGroup
+	TG = threadGroup()
+	LOG = Logged.LOG.getChild(f"threaded.{func.__qualname__}")
+	def _thread_launcher_wrapper(*args, **kwargs):
+		_thread = Thread(target=func, args=args, kwargs=kwargs, group=TG)
+		TG.add(_thread)
+		_thread.start()
+		return _thread
+	update_wrapper(_thread_launcher_wrapper, func)
+	_thread_launcher_wrapper.__annotations__["group"] = ThreadGroup
+	_thread_launcher_wrapper.group = TG
+	return _thread_launcher_wrapper

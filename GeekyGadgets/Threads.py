@@ -2,30 +2,149 @@
 
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Logging import Logged
+from GeekyGadgets.Classy import Default
+
 import sqlite3
 from queue import Queue, Empty as EmptyQueueException
-import queue
 from threading import (Timer as DelayedCall, Lock, RLock, Condition, Semaphore, BoundedSemaphore, Event, Barrier,
-					   BrokenBarrierError, Thread as _Thread)
+					   BrokenBarrierError, Thread as _Thread, ThreadError)
 from threading import (setprofile as set_profile, setprofile_all_threads as set_profile_all_threads,
-getprofile as get_profile, settrace as set_trace_function, settrace_all_threads as set_trace_all_threads,
-gettrace as get_trace_function, current_thread, active_count, enumerate as enumerate_threads, main_thread)
+					   getprofile as get_profile, settrace as set_trace_function,
+					   settrace_all_threads as set_trace_all_threads, gettrace as get_trace_function, current_thread,
+					   active_count, enumerate as enumerate_threads, main_thread)
+
 __all__ = (
 	"set_profile", "set_profile_all_threads", "get_profile", "set_trace_function", "set_trace_all_threads",
 	"get_trace_function", "current_thread", "active_count", "enumerate_threads", "main_thread",
 	"DummyLock", "ThreadGroup", "ThreadConnection", "DelayedCall", "Lock", "RLock", "Condition", "Semaphore",
-	"BoundedSemaphore", "Event", "Barrier", "BrokenBarrierError", "Thread"
+	"BoundedSemaphore", "Event", "Barrier", "BrokenBarrierError", "Thread", "CalledBeforeRealized", "Future"
 )
 
-class ThreadGroup: pass
+class CalledBeforeRealized(ThreadError):
+	def __init__(self, thread : "Thread"):
+		self.args = (f"Tried to `call` future of {thread} before it had been realized.", )
+
+class _NOT_REALIZED: pass
+class Future:
+	
+	value : Any
+	thread : "Thread"
+	awaiter : Condition
+
+	def __init__(self, thread):
+		self.value = _NOT_REALIZED
+		self.thread = thread
+		self.awaiter = Condition()
+
+	def __await__(self):
+		
+
+	@property
+	def ready(self):
+		return self.value is not _NOT_REALIZED
+
+	def realize(self, value):
+		assert current_thread() == self.thread, f"Only the thread assigned to this future can realize this future. {current_thread()=} and {self.thread=}"
+		self.value = value
+	
+	def call(self):
+		if self.value is _NOT_REALIZED:
+			raise CalledBeforeRealized(thread=self.thread)
+		else:
+			return self.value
+
+class ThreadGroup:
+	
+	_dict : dict[str,"Thread"]
+	_names : list[str]
+
+	writeLock : RLock
+	names : list[str]
+
+	def __init__(self, iterable : Iterable["Thread"]|Iterator["Thread"]=[]):
+		self.writeLock = RLock()
+		with self.writeLock:
+			self._dict = {thread.name:thread for thread in iterable}
+			self._names = list(self._dict.keys())
+
+		if not all(isinstance(t, Thread) for t in self):
+			offenders = list(repr(t) for t in self if not isinstance(t, Thread))
+			if len(offenders) == 1:
+				raise TypeError(f"Item {offenders[0]} is not an instance of {Thread}")
+			else:
+				raise TypeError(f"Items {', '.join(offenders)} are not instances of {Thread}")
+
+	def __iter__(self):
+		for thread in self._dict.values():
+			yield thread
+
+	def __getitem__(self, key : int|str) -> "Thread":
+		return self._dict[self._names[key]] if isinstance(key, int) else self._dict[key]
+	
+	@Default["_names"]
+	def names(self) -> list[str]:
+		return [name for name in self._names]
+
+	def add(self, thread : "Thread") -> int:
+		with self.writeLock:
+			if thread.name not in self._dict:
+				self._names.append(thread.name)
+				i = len(self._names) - 1
+			else:
+				i = self._names.index(thread.name)
+			self._dict[thread.name] = thread
+		return i
+	
+	@overload
+	def __or__(self, other : "ThreadGroup") -> "ThreadGroup": ...
+	@overload
+	def __or__(self, other : Iterable["Thread"]) -> "ThreadGroup": ...
+	def __or__(self, other):
+		from GeekyGadgets.Iterators import Chain
+		return ThreadGroup(Chain(self, other))
+
+	def wait(self, timeout : float|None=None) -> bool:
+		"""Wait for all started threads in the group to finish. Returns `True` if all threads in the group have been 
+		started and finished running. If at least one thread has yet to be started and/or finished, this will return 
+		`False`. `timeout` is passed on to Thread.join(timeout=timeout)."""
+		allFinished = True
+		threads = tuple(self)
+		for thread in threads:
+			if thread.ident is None:
+				allFinished = False
+			else:
+				thread.join(timeout=timeout)
+				if thread.is_alive():
+					allFinished = False
+		return allFinished
+	
+	def start(self):
+		for thread in self:
+			thread.start()
+	
+	@property
+	def alive(self):
+		return tuple(map(Thread.is_alive, self))
+	
+	@property
+	def anyAlive(self):
+		return any(t.is_alive for t in self)
+	
+	@property
+	def allAlive(self):
+		return all(t.is_alive for t in self)
 
 class Thread(_Thread):
 	
 	group : ThreadGroup
+	future : Future
+	"""An object to access the """
 
 	def __init__(self, group: ThreadGroup | None = None, target: Callable[[Any], object] | None = None, name: str | None = None, args: Iterable[Any] = [], kwargs: Mapping[str, Any] | None = None, *, daemon: bool | None = None) -> None:
 		super().__init__(target=target, name=name, args=args, kwargs=kwargs, daemon=daemon)
 		self.group = group
+		self.group.add(self)
+		self.future = Future(self)
 
 class DummyLock:
 	def acquire(self, blocking: bool = None, timeout: float = None):

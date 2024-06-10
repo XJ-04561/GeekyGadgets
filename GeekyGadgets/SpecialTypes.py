@@ -26,6 +26,7 @@ class LimitedDict(dict):
 					self.pop(next(iter(self)))
 				self.N += 1
 			super().__setitem__(key, value)
+
 	def setdefault(self, key, value):
 		with self._lock:
 			if key not in self:
@@ -39,6 +40,17 @@ class LimitedDict(dict):
 			if key in self:
 				self.N -= 1
 			super().__delitem__(key)
+
+	def update(self, other : dict|Iterable[tuple[Any,Any]]):
+		if isinstance(other, dict):
+			other = other.items()
+		for key, value in other:
+			self[key] = value
+	
+	def clear(self):
+		for key in tuple(self.keys()):
+			self.pop(key)
+
 	def pop(self, key, default=_NOT_SET):
 		with self._lock:
 			if key in self:
@@ -48,6 +60,7 @@ class LimitedDict(dict):
 				return super().pop(key)
 			else:
 				return super().pop(key, default)
+			
 	def popitem(self) -> tuple:
 		with self._lock:
 			self.N -= 1
