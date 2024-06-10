@@ -48,6 +48,8 @@ from ast import Assign, Attribute, Call, Subscript, BinOp, UnaryOp, Compare
 from ast import arg as Argument, keyword as Keyword
 from functools import cached_property, cache
 
+__all__ = ("this",)
+
 class this: pass
 class ThisContainer:
 	nodeTree : ast.AST = None

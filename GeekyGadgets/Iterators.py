@@ -1,9 +1,9 @@
 
 from collections.abc import Iterable
 from GeekyGadgets.Globals import *
-from GeekyGadgets.TypeHinting import *
 
 _E = TypeVar("_E")
+_NOT_SET = object()
 
 if PYTHON_VERSION < (3, 12):
 	class Batched(Iterator):
@@ -18,7 +18,59 @@ if PYTHON_VERSION < (3, 12):
 				yield ret
 else:
 	from itertools import batched as Batched
-from itertools import chain as Chain
+from itertools import chain as Chain, takewhile as TakeWhile, dropwhile as DropWhile, zip_longest as ZipLongest
+
+__all__ = ("Batched", "Chain", "TakeWhile", "DropWhile", "ZipLongest", "DropThenTakeWhile", "ChainChain", "Grouper",
+		   "Walker", "LeavesWalker", "BranchesWalker", "ConfigWalker", "AlphaRange")
+
+class AlphaRange:
+
+	_range : range
+
+	@overload
+	def __init__(self, stop: SupportsIndex, /) -> range: ...
+	@overload
+	def __init__(self, start: SupportsIndex, stop: SupportsIndex, step: SupportsIndex = ..., /) -> range: ...
+	def __init__(self, start, stop=_NOT_SET, step=_NOT_SET, /):
+		if stop is _NOT_SET:
+			self._range = range(start)
+		elif step is _NOT_SET:
+			self._range = range(start, stop)
+		else:
+			self._range = range(start, stop, step)
+
+	def __iter__(self):
+		from GeekyGadgets.Formatting import alphabetize
+		for i in self._range:
+			yield alphabetize(i)
+
+class DropThenTakeWhile:
+	@overload
+	def __init__(self, iterable : Iterable|Iterator): ...
+	@overload
+	def __init__(self, iterable : Iterable|Iterator, key : Callable): ...
+	@overload
+	def __init__(self, iterable : Iterable|Iterator, startKey : Callable, stopKey : Callable): ...
+	def __init__(self, iterable : Iterable|Iterator, startKey=None, stopKey=None, key=None):
+		if key is not None:
+			self.startKey = self.stopKey = key
+		else:
+			if startKey is None:
+				self.startKey = lambda x:bool(x)
+			else:
+				self.startKey = startKey
+			if stopKey is None:
+				self.stopKey = lambda x:bool(x)
+			else:
+				self.stopKey = stopKey
+
+		self.iterator = iterable if isinstance(iterable, Iterator) else iter(iterable)
+	
+	def __iter__(self):
+		return self
+	
+	def __next__(self):
+		next(TakeWhile(self.stopKey, DropWhile(self.startKey, self.iterator)))
 
 class ChainChain(Chain):
 	def __init__(self, *iterables: Iterable) -> None:

@@ -1,6 +1,26 @@
-
 from GeekyGadgets.Globals import *
+from GeekyGadgets.This import this
 from pprint import pformat, pprint
+import GeekyGadgets.Formatting.Case as Case
+
+pluralPattern = re.compile(r"s$|x$|z$|sh$|ch$")
+hiddenPattern = re.compile(r"^_[^_].*")
+
+@cache
+def alphabetize(n : int):
+	m = n
+	out = []
+	while m > 0:
+		out.append("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[n%26])
+		m //= 26
+	return "".join(out)
+
+def pluralize(string : str) -> str:
+	match pluralPattern.search(string):
+		case None:
+			return f"{string}s"
+		case _:
+			return f"{string}es"
 
 @overload
 def callFormat(func : Callable, args : tuple[Any]=(), kwargs : dict[str,Any]={}) -> str: ...

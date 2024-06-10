@@ -4,7 +4,7 @@ def test_toml():
 	from GeekyGadgets.Configs import loadTOML, Config, Category, FlagNotFound
 	import os
 	
-	config1 = loadTOML(os.path.join("tests", "tomlExample.toml"))
+	config1 = loadTOML("tomlExample.toml")
 	
 	from tomlExample import config as config2
 
@@ -51,7 +51,7 @@ def test_methods():
 	from GeekyGadgets.Configs import loadTOML, Config, Category, FlagNotFound
 	import os
 	
-	config1 = loadTOML(os.path.join("tests", "tomlExample.toml"))
+	config1 = loadTOML("tomlExample.toml")
 	
 	from tomlExample import config as _config
 	from copy import deepcopy
@@ -90,7 +90,7 @@ def test_operators():
 	from GeekyGadgets.Configs import loadTOML, Config, Category, FlagNotFound
 	import os
 	
-	config1 = loadTOML(os.path.join("tests", "tomlExample.toml"))
+	config1 = loadTOML("tomlExample.toml")
 	
 	from tomlExample import config as _config
 	from copy import deepcopy

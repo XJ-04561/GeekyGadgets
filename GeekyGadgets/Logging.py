@@ -1,6 +1,8 @@
 
 from GeekyGadgets.Globals import *
 
+__all__ = ("Logged",)
+
 class Logged:
 	
 	LOG : logging.Logger = ROOT_LOGGER

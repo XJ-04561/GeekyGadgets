@@ -1,8 +1,11 @@
 
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Logging import Logged
+from GeekyGadgets.Formatting import callFormat
+from GeekyGadgets.Threads import *
+from GeekyGadgets.Threads import current_thread
 
-_NULL_KEY = object()
+__all__ = ("UninitializedError", "Default", "ClassProperty", "CachedClassProperty", "ThreadMethod", "ThreadFunction", "ThreadDescriptor")
 
 class UninitializedError(AttributeError):
 	def __init__(self, obj=None, name=None, **kwargs):
@@ -15,32 +18,6 @@ class UninitializedError(AttributeError):
 		else:
 			name = ""
 		super().__init__(f"Attribute {name}of {objName} was accessed, but has yet to be set.", **kwargs)
-
-class InitCheckDescriptor:
-
-	def __init__(cls, className, bases, namespace):
-		cls.names = {}
-
-	def __set_name__(self, owner, name):
-		object.__getattribute__(self, "names")[id(owner)] = name
-
-	def __set__(self, instance, value):
-		instance.__dict__[object.__getattribute__(self, "names")[id(type(instance))]] = value
-
-	def __get__(self, instance : object, owner=None):
-		return instance.__dict__.get(object.__getattribute__(self, "names").get(id(owner), id(_NULL_KEY)), self)
-
-	def __delete__(self, instance):
-		pass
-
-	def __mult__(self, other): return self
-	def __add__(self, other): return self
-	def __sub__(self, other): return self
-	def __getattribute__(self, name): return self
-
-	def __bool__(self): return False
-
-class NotSet(metaclass=InitCheckDescriptor): pass
 
 class Default:
 
@@ -174,3 +151,57 @@ class CachedClassProperty:
 		
 	def __repr__(self):
 		return f"{object.__repr__(self)[:-1]} name={self.name!r}>"
+
+class ThreadDescriptor(function, Logged):
+
+	func : FunctionType | MethodType
+	owner : object
+
+	def __init__(self, func, owner=None):
+		self.func = func
+		self.owner = owner
+	
+	def __call__(self, *args, **kwargs):
+		
+		self.LOG.info(f"Starting thread for {callFormat(self.func, args, kwargs)}")
+
+		thread = Thread(target=self._funcWrapper, args=args, kwargs=kwargs, daemon=True)
+		if hasattr(getattr(self.owner, "_threads", None), "append"):
+			self.owner._threads.append(thread)
+		thread.start()
+
+		self.LOG.info(f"Started thread for {callFormat(self.func, args, kwargs)}")
+		return thread
+	def __repr__(self):
+		return f"<{self.__class__.__name__}({self.func}) at {hex(id(self))}>"
+	
+	def __set_name__(self, owner, name):
+		if hasattr(self.func, "__set_name__"):
+			self.func.__set_name__(self, owner, name)
+		self.__name__ = name
+		self.owner = owner
+
+	def _funcWrapper(self, *args, **kwargs):
+		try:
+			self.func(*args, **kwargs)
+		except Exception as e:
+			current_thread().exception = e
+			e.add_note(f"This exception occured in a thread running the following function call: {callFormat(self.func, args, kwargs)}")
+			self.LOG.exception(e)
+
+	def wait(self):
+		self.owner.wait()
+	
+class ThreadMethod(ThreadDescriptor):
+
+	func : MethodType
+
+class ThreadFunction(ThreadDescriptor):
+	
+	func : FunctionType
+	
+	def __get__(self, instance, owner=None):
+		if instance is not None:
+			return ThreadMethod(self.func.__get__(instance), instance)
+		else:
+			return ThreadMethod(self.func.__get__(owner), owner)

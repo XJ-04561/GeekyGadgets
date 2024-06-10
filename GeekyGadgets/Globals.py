@@ -1,14 +1,11 @@
 
-from typing import *
-from types import *
+from GeekyGadgets.TypeHinting import *
 from collections import UserDict
 import re, threading, time, sys, logging, os, types
 from timeit import default_timer as timer
-from functools import cached_property
-from io import BufferedWriter
-
-class Number: pass
-Number = int|float|complex
+from time import sleep
+from functools import cached_property, partial, cache, wraps
+from io import BufferedWriter, BufferedReader
 
 _T = TypeVar("_T")
 PYTHON_VERSION = sys.version_info

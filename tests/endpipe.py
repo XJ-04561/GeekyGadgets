@@ -3,9 +3,10 @@ import threading
 
 def main():
 	print("Start")
+	message : str= input("")
 	for i in range(6):
 		data : str= input("")
-		time.sleep(0.5)
+		time.sleep(0.25)
 		if data.isnumeric():
 			print(int(data)*i)
 

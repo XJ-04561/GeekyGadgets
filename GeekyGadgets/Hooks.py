@@ -6,6 +6,8 @@ import itertools
 from GeekyGadgets.Threads import Thread, current_thread
 from queue import Queue, Empty as EmptyQueueException
 
+__all__ = ("HookBaitingException", "Hook", "DummyHooks", "Hooks", "Bait", "GlobalHooks")
+
 class HookBaitingException(Exception): pass
 
 class Hook:
@@ -127,7 +129,7 @@ class Hooks(Logged):
 							e.add_note(f"This occurred while calling the hook {hook!r} tied to {eventType=} with {eventInfo=}")
 							self.LOG.exception(e)
 				else:
-					self.LOG.warning(f"{eventType=} triggered, but no hooks registered in {self!r}")
+					self.LOG.info(f"{eventType=} triggered, but no hooks registered in {self!r}")
 			except EmptyQueueException:
 				pass
 			except Exception as e:

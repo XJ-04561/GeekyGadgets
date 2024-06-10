@@ -1,11 +1,22 @@
 
 GEEKY_GADGETS_INIT = True
 
-from GeekyGadgets.URL import URL, URL_TEMPLATE, HTTPS, HTTP, FTP, MAILTO, FILE, DATA, IRC
-from GeekyGadgets.Iterators import Batched, Walker, LeavesWalker, BranchesWalker
-from GeekyGadgets.Configs import Config
-from GeekyGadgets.Logging import Logged
-from GeekyGadgets.This import this
+from GeekyGadgets.URL import *
+import GeekyGadgets.TypeHinting as TypeHinting
+from GeekyGadgets.Threads import (DummyLock, ThreadGroup, ThreadConnection, DelayedCall, Lock, RLock, Condition,
+								  Semaphore, BoundedSemaphore, Event, Barrier, BrokenBarrierError, Thread)
+from GeekyGadgets.This import *
+from GeekyGadgets.TerminalUpdater import *
+from GeekyGadgets.SpecialTypes import *
+from GeekyGadgets.Processes import *
+from GeekyGadgets.Paths import *
+from GeekyGadgets.Logging import *
+from GeekyGadgets.Iterators import *
+from GeekyGadgets.Hooks import *
+from GeekyGadgets.Functions import *
+from GeekyGadgets.Downloader import *
+from GeekyGadgets.Configs import *
+from GeekyGadgets.Logging import *
 
 del GEEKY_GADGETS_INIT
 

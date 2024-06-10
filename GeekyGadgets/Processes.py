@@ -5,20 +5,22 @@ from GeekyGadgets.Paths import Path
 from GeekyGadgets.Classy import Default
 from GeekyGadgets.This import this
 from GeekyGadgets.Threads import Thread
+from GeekyGadgets.Functions import first
 
 from subprocess import Popen, PIPE
 import subprocess
 import shutil
 
 _NOT_SET = object()
-ARGS_PATTERN = re.compile(r"((?:['][^']*?['])|(?:[\"][^\"]*?[\"])|(?:\S+))", flags=re.MULTILINE+re.DOTALL)
-WORD_PATTERN = re.compile(r"^\w+$")
+ARGS_PATTERN = re.compile(r"""((?:['][^']*?['])|(?:["][^"]*?["])|(?:\S+))""", flags=re.MULTILINE)
+WORD_PATTERN = re.compile(r"^[\w_]+$")
 ILLEGAL_PATH_CHARACTERS = re.compile(r"[^\w_ \-\.]")
-SYNTAX_SYMBOLS = ["|", ">", ";", "&", "&&", "||"]
+SYNTAX_SYMBOLS = ["|", ";", "&", "&&", "||"]
+DUMP_SYMBOL = ">"
 SYNTAX_SYMBOLS_LOOKUP : dict[str,type["Process"]]
 
 __all__ = (
-	"MissingDependency", "Command", "Process", "ParallelProcess", "SequentialProcess", "PipeProcess", "DumpProcess",
+	"MissingDependency", "Command", "Process", "ParallelProcess", "SequentialProcess", "PipeProcess",
 	"ConditionalProcess", "OnSuccessProcess", "OnFailureProcess", "FakeProcess", "evalCommand"
 )
 
@@ -31,99 +33,194 @@ class FakePopen:
 	def wait(self): pass
 	def __bool__(self): return False
 
+class Commands:
+	
+	commands : list["Command"]
+
+	def __init__(self, commands : tuple[str], category : str="Command", names : str=None, hooks : Hooks=GlobalHooks, dirs : Path=None):
+		self.commands = []
+		self.category = category
+		self.names = names or [f"Command[{i+1}]" for i in range(len(commands))]
+		self.dirs = dirs or [Path(".") for _ in range(len(commands))]
+		self.hooks = hooks
+		for command, name, dir in zip(commands, self.names, self.dirs):
+			self.commands.append(Command(command, category=category, name=name, hooks=hooks, dir=dir))
+	
+	def start(self):
+		for command in self.commands:
+			command.start()
+	
+	def wait(self):
+		for command in self.commands:
+			command.wait()
+	
+	@property
+	def returncodes(self):
+		return {command.name:first(filter(lambda x:x is not None and x != 0, reversed(command.exitcodes))) for command in self.commands}
+	
+	@Default["returncodes"]
+	def failed(self):
+		return {command.name:first(map(lambda x:'_'.join(filter(WORD_PATTERN.fullmatch, x.args[:2])), filter(lambda x:x.EXITCODES[0] not in [None, 0], reversed(command)))) for command in self.commands}
+
 class Command:
 	
 	running : bool = property(lambda self: any(map(*this.RUNNING, self.processes)))
-	exitcodes = property(lambda self: self.processes[-1].EXITCODES)
-	success : bool = property(lambda self: self.processes[-1].SUCCESS)
+	exitcodes = property(lambda self: self.processes.EXITCODES)
+	success : bool = property(lambda self: self.processes.SUCCESS)
 	hooks : Hooks
-	processes : list["Process"]
-	notOnPath = cached_property(lambda self: set(map(lambda x:x.args[0], filter(lambda x:x.ON_PATH, self.processes))))
+	processes : "Process"
+	notOnPath = cached_property(lambda self: set(map(lambda x:x.args[0], filter(lambda x:not x.ON_PATH, self.processes))))
 
+	_thread : Thread = None
 
 	@overload
-	def __init__(self, args : str, hooks : Hooks=GlobalHooks, dir : Path=Path(".")): ...
+	def __init__(self, args : str, category : str="Command", name : str="Process", hooks : Hooks=GlobalHooks, dir : Path=Path(".")): ...
 	@overload
-	def __init__(self, args : list[str], hooks : Hooks=GlobalHooks, dir : Path=Path(".")): ...
-	def __init__(self, args, hooks=GlobalHooks, dir=Path(".")):
+	def __init__(self, args : list[str], category : str="Command", name : str="Process", hooks : Hooks=GlobalHooks, dir : Path=Path(".")): ...
+	def __init__(self, args, category="Command", name="Process", hooks=GlobalHooks, dir=Path(".")):
 		
 		self.hooks = hooks
-		if not isinstance(args, str):
-			self.args = args 
-		else:
-			self.args = ARGS_PATTERN.findall(args)
+		self.category = category
+		self.name = name
+		if isinstance(args, Iterator):
+			args = list(args)
 		
-		self.processes = evalCommand(self.args, dir=dir)
+		if isinstance(args, str):
+			self.args = ARGS_PATTERN.findall(args)
+		elif isinstance(args, Iterable) and all(isinstance(arg, str) for arg in args):
+			self.args = args
+		else:
+			raise TypeError(f"`args` must be an iterable of strings or itself a `str`")
+		
+		self.processes = evalCommand(self.args, dir=dir, hooks=hooks)
+		for i, p in enumerate(self.processes):
+			p.category = self.category
+			p.name = f"{self.name}-{i}"
+	
+	def __str__(self):
+		return "".join(map(str, self.processes))
 	
 	def run(self):
-		self.processes[0].run()
-
-	def start(self):
-		if self.notOnPath:
-			raise MissingDependency(f"Could not find dependencies: {', '.join(self.notOnPath)}")
-		else:
-			self._thread = Thread(target=self.run)
-			self._thread.start()
-
-	def wait(self):
+		self.hooks.trigger(f"{self.category}Started", {"name" : self.name})
+		self.processes.run()
 		for p in self.processes:
 			p.wait()
-		return p.EXITCODES
+		if self.success:
+			self.hooks.trigger(f"{self.category}Finished", {"name" : self.name})
+		else:
+			self.hooks.trigger(f"{self.category}Failed", {"name" : self.name})
+
+	def start(self):
+		
+		self.checkReadiness()
+		self._thread = Thread(target=self.run)
+		self._thread.start()
+
+	def wait(self):
+		if self._thread:
+			self._thread.join()
+		else:
+			for p in self.processes:
+				p.wait()
+		return self.exitcodes
+	
+	def checkReadiness(self):
+		if self.notOnPath:
+			raise MissingDependency(f"Could not find dependencies: {', '.join(self.notOnPath)}")
+		elif not all(os.path.exists(os.path.dirname(path)) for p in self.processes for path in [p.logname, p.filename]):
+			offenders = []
+			for p in self.processes:
+				for path in [p.logname, p.filename]:
+					if not os.path.exists(os.path.dirname(path)):
+						offenders.append(os.path.dirname(path))
+			raise NotADirectoryError(f"Can not store subprocess outputs in directories: {', '.join(offenders)}")
+		elif not all((not os.path.exists(path) and os.access(os.path.dirname(path), mode=os.W_OK)) or os.access(path, mode=os.W_OK) for p in self.processes for path in [p.logname, p.filename]):
+			offenders = []
+			for p in self.processes:
+				for path in [p.logname, p.filename]:
+					if os.path.exists(path) and os.access(path, mode=os.W_OK):
+						continue
+					elif os.path.exists(path) and not os.access(path, mode=os.W_OK):
+						offenders.append(path)
+					elif not os.access(os.path.dirname(path), mode=os.W_OK):
+						offenders.append(os.path.dirname(path))
+			raise PermissionError(f"Can not store subprocess outputs in directories: {', '.join(offenders)}")
 
 class Process:
 
 	OUT : BufferedWriter = Default(lambda self: self.ERR if self.filename == self.logname else open(self.filename, "wb"))
 	ERR : BufferedWriter = Default(lambda self: open(self.logname, "wb"))
-	IN : BufferedWriter = property(*this.parent.OUT)
+	IN : BufferedReader = Default(lambda self: self.parent.OUT if self.parent and self.parent.OUT and not self.parent.OUT.closed and self.parent.OUT.readable() else None)
 	RUNNING : bool
-	EXITCODES : int | list[int] = property(lambda self: [self.popen.returncode] + self.parent.EXITCODES)
-	SUCCESS : bool = property(*this.popen.returncode == 0)
+	EXITCODES : int | list[int] = property(lambda self: [self.popen.returncode] + self.child.EXITCODES if self.child else [self.popen.returncode])
+	SUCCESS : bool = property(lambda self: self.popen.returncode == 0 and (self.child.SUCCESS if self.child else True))
 	ON_PATH = property(lambda self: shutil.which(self.args[0]) is not None)
+	END_SYMBOL : str= None
 
 	parent : "Process"
 	args : Iterable[str]
-	logname : Path
-	filename : Path
 	child : "Process"
+	category : str
+	name : str
+	dir : Path
+	logname : Path = Default["name"](lambda self: self.dir / f"{self.name}.log")
+	filename : Path = Default["name"](lambda self: self.logname)
 	hooks : Hooks
 
-	popen : Popen = FakePopen()
+	popen : Popen
 
-	@overload
-	def __init__(self, *, args : Iterable[str], filename : str=None, logname : str=None, hooks : Hooks=GlobalHooks, dir : Path="."): ...
-	@overload
-	def __init__(self, *, args : Iterable[str], child : "Process", filename : str=None, logname : str=None, hooks : Hooks=GlobalHooks, dir : Path="."): ...
-	@overload
-	def __init__(self, *, parent : "Process", args : Iterable[str], child : "Process", filename : str=None, logname : str=None, hooks : Hooks=GlobalHooks, dir : Path="."): ...
-	def __init__(self, *, parent=_NOT_SET, args, filename=None, logname=None, child=_NOT_SET, hooks=GlobalHooks, dir="."):
-		if parent is _NOT_SET:
-			self.parent = FakeProcess()
-		else:
-			self.parent = parent
-			self.parent.child = self
+	def __init__(self, *, parent : "Process"=None, args : Iterable[str], child : "Process"=None, 
+				name : str|Any=None, category : str|Any="Command", filename : str=None, logname : str=None,
+				hooks : Hooks=GlobalHooks, dir : Path="."):
+		self.parent = parent
 		self.args = args
-		self.logname = Path(dir) / (logname or f"{'_'.join(filter(WORD_PATTERN.fullmatch, self.args[:2]))}.log")
-		self.filename = filename or self.logname
-
-		self.child = child if child is not _NOT_SET else FakeProcess()
+		self.popen = FakePopen()
+		self.category = category
+		self.name = name or '_'.join(filter(WORD_PATTERN.fullmatch, self.args[:2]))
+		self.dir = Path(dir)
+		if logname: self.logname = self.dir / logname
+		if filename: self.filename = self.dir / filename
+		self.child = child
 		self.hooks = hooks
 
-	@overload
-	def run(self): ...
-	@overload
-	def run(self, name : str): ...
-	def run(self, name=_NOT_SET):
-		if self.popen:
-			self.child.run(name=name)
-		else:
-			self.popen = Popen(args=self.args, stdin=self.IN, stderr=self.ERR, stdout=self.OUT)
-			self.hooks.trigger("ProcessStarted", {"name" : name if name is not _NOT_SET else " ".join(self.args)})
-			if hasattr(self.IN, "close"):
-				self.IN.close()
-			self.run(name=name)
+		if self.parent:
+			self.parent.child = self
+		if self.child:
+			self.child.parent = self
+
+	def __str__(self):
+		return " ".join(self.args) + (" "+self.END_SYMBOL if self.END_SYMBOL else "")
+
+	def run(self):
+		
+		self.popen = Popen(args=self.args, stdin=self.IN, stderr=self.ERR, stdout=self.OUT)
+		self.OUT, self.ERR, self.IN = self.popen.stdout, self.popen.stderr, self.popen.stdin
+		
+		try:
+			if not self.OUT.readable():
+				self.OUT.close()
+		except:
+			pass
+		
+		try:
+			if not self.ERR.readable():
+				self.ERR.close()
+		except:
+			pass
+		
+		try:
+			self.IN.close()
+		except:
+			pass
+		
+		self.hooks.trigger(f"{self.category}Started", {"name" : self.name})
 	
 	def wait(self):
-		self.popen.wait()
+		if self.popen.returncode is None:
+			if self.popen.wait() == 0:
+				self.hooks.trigger(f"{self.category}Finished", {"name" : self.name})
+			else:
+				self.hooks.trigger(f"{self.category}Failed", {"name" : self.name})
 	
 	@property
 	def RUNNING(self):
@@ -132,89 +229,94 @@ class Process:
 			return True
 		except:
 			return False
+	
+	def __len__(self):
+		swap = self
+		i = 1
+		while swap.child:
+			swap = swap.child
+			i += 1
+		return i
+	
+	def __iter__(self):
+		swap = self
+		yield swap
+		while swap.child:
+			swap = swap.child
+			yield swap
 
-class ParallelProcess(Process): pass
+	def __getitem__(self, key):
+		if isinstance(key, int):
+			realKey = key if key >= 0 else len(self)+key
+			for i, p in zip(range(realKey+1), self):
+				if i == realKey:
+					return p
+			else:
+				raise IndexError(f"Index {key} out of range for {type(key).__qualname__} object of length {len(self)}")
+		elif isinstance(key, slice):
+			return list(self)[key]
+		else:
+			return TypeError(f"Process indices must be integers or slices, not {type(key).__qualname__}")
+
+class ParallelProcess(Process):
+	
+	END_SYMBOL : str= "&"
+
+	def run(self):
+		super().run()
+		if self.child:
+			self.child.run()
 
 class SequentialProcess(Process):
 	
-	def run(self, name=_NOT_SET):
-		if self.RUNNING:
-			self.wait()
-			self.child.run(name=name)
-		else:
-			super().run(name=name)
+	END_SYMBOL : str= ";"
+	
+	def run(self):
+		super().run()
+		self.wait()
+		if self.child:
+			self.child.run()
 
 class PipeProcess(Process):
 	
-	@property
-	def OUT(self):
-		return self.__dict__.get("OUT", PIPE)
-
-	@overload
-	def run(self): ...
-	@overload
-	def run(self, name : str): ...
-	def run(self, name=_NOT_SET):
-		if self.popen:
-			self.child.run(name=name)
-		else:
-			super().run(name=name)
-
-class DumpProcess(Process):
+	END_SYMBOL : str= "|"
 	
-	filename : str
+	OUT = Default["popen"](*this.__dict__.get("OUT", PIPE))
 
-	@overload
-	def __init__(self, *, parent : "Process", args : Iterable[str], filename : str, child : "Process", hooks : Hooks=GlobalHooks): ...
-	def __init__(self, *, parent=_NOT_SET, args, filename, child=_NOT_SET, hooks : Hooks=GlobalHooks):
-		super().__init__(parent=parent, args=args, child=child, hooks=hooks)
-		self.filename = filename
-
-	@property
-	def OUT(self):
-		return self.__dict__.get("OUT", open(self.filename, "wb"))
-	@OUT.setter
-	def OUT(self, value):
-		self.__dict__["OUT"] = value
-
-	@overload
-	def run(self): ...
-	@overload
-	def run(self, name : str): ...
-	def run(self, name=_NOT_SET):
-		if self.popen:
-			self.OUT.close()
-			self.OUT = None
-			self.popen.wait()
-
-			self.child.run(name=name)
-		else:
-			super().run(name=name)
+	def run(self):
+		super().run()
+		if self.child:
+			self.child.run()
 
 class ConditionalProcess(Process):
 	
-	condition : bool
+	END_SYMBOL : str= ""
 
-	@overload
-	def run(self): ...
-	@overload
-	def run(self, name : str): ...
-	def run(self, name=_NOT_SET):
-		self.parent.wait()
+	condition : bool = property(lambda self: True)
+
+	def run(self):
+		super().run()
+		self.wait()
 		if self.condition:
-			super().run(name=name)
+			self.child.run()
 
 class OnSuccessProcess(ConditionalProcess):
 
+	END_SYMBOL : str= "&&"
+	SUCCESS : bool = property(lambda self: ((self.popen.returncode is not None and (self.popen.returncode == 0) == (self.child.popen.returncode == 0))) and (self.child.child.SUCCESS if self.child.child else True))
+
 	@property
 	def condition(self):
-		return self.parent.popen.returncode == 0
+		return self.popen.returncode == 0
 
 class OnFailureProcess(ConditionalProcess):
 
+	END_SYMBOL : str= "||"
+	SUCCESS : bool = property(lambda self: (self.popen.returncode == 0 or self.child.popen.returncode == 0) and (self.child.child.SUCCESS if self.child.child else True))
+
 	@property
 	def condition(self):
-		return self.parent.popen.returncode != 0
+		return self.popen.returncode != 0
 
 class FakeProcess(Process):
 	
@@ -224,40 +326,58 @@ class FakeProcess(Process):
 	RUNNING : False
 	EXITCODES : list[int] = []
 	SUCCESS : bool = True
+	END_SYMBOL : str= ""
 
+	parent : Process
 	args : Iterable[str] = []
+	child : Process
 
-	def __init__(self, *args, **kwargs): pass
+	def __init__(self, parent=None, child=None, **kwargs):
+		self.parent = parent
+		self.child = child
 	def run(self): pass
 	def wait(self): pass
 
+
 SYNTAX_SYMBOLS_LOOKUP = {
 	"|" :   PipeProcess,
-	">" :   DumpProcess,
 	";" :   SequentialProcess,
 	"&" :   ParallelProcess,
 	"&&" :  OnSuccessProcess, # ConditionalProcess on success
 	"||" :  OnFailureProcess, # ConditionalProcess on failure
 }
 
-def evalCommand(argv : Iterable[str], dir=None) -> "Process":
+@overload
+def evalCommand(argv : Iterator[str]|Iterable[str], *, name : str|Any="Process", category : str|Any="Command",
+				filename : str=None, logname : str=None, hooks : Hooks=GlobalHooks, dir : Path=".") -> "Process": ...
+def evalCommand(argv, **kwargs):
 	args = []
 	filename = None
-	_iter = iter(argv)
-	for arg in _iter:
+	breaker = None
+	if isinstance(argv, Iterable):
+		argv = iter(argv)
+	for arg in argv:
 		if arg in SYNTAX_SYMBOLS:
 			breaker = arg
-			if breaker == ">":
-				for arg in _iter:
-					filename = arg
-					break
 			break
-		args.append(arg)
+		elif arg == ">":
+			try:
+				filename = next(argv)
+				breaker = next(argv)
+			except StopIteration:
+				pass
+			break
+		else:
+			args.append(arg)
+	
+	if not args:
+		return None
+	elif breaker is None:
+		return Process(args=args, **(kwargs | {"filename" : filename}))
 	else:
-		return [Process(args=args)]
-	
-	processClass = SYNTAX_SYMBOLS_LOOKUP[breaker]
-	
-	ret = processClass(args=args, filename=filename, child=evalCommand(list(_iter), dir=dir), dir=dir)
-	ret.child.parent = ret
-	return ret
+		processClass = SYNTAX_SYMBOLS_LOOKUP[breaker]
+		
+		ret = processClass(args=args, child=evalCommand(argv, **kwargs), **kwargs)
+		if ret.child is not None:
+			ret.child.parent = ret
+		return ret
