@@ -22,6 +22,7 @@ class UninitializedError(AttributeError):
 		super().__init__(f"Attribute {name}of {objName} was accessed, but has yet to be set.", **kwargs)
 
 class Default:
+	"""Works similarly to `builtins.property`, but is by default """
 
 	deps : tuple = None
 	name : str
@@ -93,6 +94,35 @@ class Default:
 		return self
 
 class ClassProperty:
+	"""Similar to `builtins.property` but will generate the callback-returned value when accessed through the class 
+	itself, and not only through an instance of the class.
+	
+	### Example
+	```python
+	import time
+	from timeit import default_timer as timer
+	start = timer()
+
+	class MyClass:
+		@ClassProperty
+		def now(self) -> float:
+			global start
+			diff = timer() - start
+			start = timer()
+			return diff
+		
+	obj = MyClass()
+	print(round(obj.now, 1))
+	# 0.0
+
+	time.sleep(1)
+	print(round(MyClass.now, 1))
+	# 1.0
+
+	time.sleep(1)
+	print(round(obj.now, 1))
+	# 1.0
+	```"""
 
 	owner : type
 	name : str
@@ -124,6 +154,39 @@ class ClassProperty:
 		return f"{object.__repr__(self)[:-1]} name={self.name!r}>"
 
 class CachedClassProperty:
+	"""A cached-value version of `ClassProperty`.
+
+	## From `ClassProperty` docstring:
+
+	Similar to `builtins.property` but will generate the callback-returned value when accessed through the class 
+	itself, and not only through an instance of the class.
+	
+	### Example
+	```python
+	import time
+	from timeit import default_timer as timer
+	start = timer()
+
+	class MyClass:
+		@ClassProperty
+		def now(self) -> float:
+			global start
+			diff = timer() - start
+			start = timer()
+			return diff
+		
+	obj = MyClass()
+	print(round(obj.now, 1))
+	# 0.0
+
+	time.sleep(1)
+	print(round(MyClass.now, 1))
+	# 1.0
+
+	time.sleep(1)
+	print(round(obj.now, 1))
+	# 1.0
+	```"""
 
 	def __init__(self, func):
 		self.func = func
@@ -154,92 +217,89 @@ class CachedClassProperty:
 	def __repr__(self):
 		return f"{object.__repr__(self)[:-1]} name={self.name!r}>"
 
-class ThreadDescriptor(Logged):
-
-	func : FunctionType | MethodType
-	wrapper : function
-	owner : object
-	threadListLock : Lock
-	
-	def __call__(self, *args, **kwargs):
-		
-		self.LOG.info(f"Starting thread for {callFormat(self.func, args, kwargs)}")
-
-		thread = Thread(target=self._funcWrapper, args=args, kwargs=kwargs, daemon=True)
-		if hasattr(getattr(self.owner, "_threads", None), "append"):
-			self.owner._threads.append(thread)
-		thread.start()
-
-		self.LOG.info(f"Started thread for {callFormat(self.func, args, kwargs)}")
-		return thread
-		
-	def __repr__(self):
-		return f"<{self.__class__.__name__}({self.func}) at {hex(id(self))}>"
-	
-	def __set_name__(self, owner, name):
-		if hasattr(self.func, "__set_name__"):
-			self.func.__set_name__(self, owner, name)
-		self.__name__ = name
-		self.owner = owner
-
-	def _funcWrapper(self, *args, **kwargs):
-		try:
-			self.func(*args, **kwargs)
-		except Exception as e:
-			current_thread().exception = e
-			e.add_note(f"This exception occured in a thread running the following function call: {callFormat(self.func, args, kwargs)}")
-			self.LOG.exception(e)
-
-	def wait(self):
-		self.owner.wait()
-
-class ThreadMethod(ThreadDescriptor):
-
-	func : MethodType
-	threads : ThreadGroup
-
-class ThreadFunction(ThreadDescriptor):
-	
-	func : FunctionType
-	methods : dict
-
-	def __new__(cls, func, owner=None):
-		obj = super().__new__(cls)
-		obj.methods = dict()
-		obj.func = func
-		obj.owner = owner
-
-		def _thread_call_wrapper(*args, **kwargs):
-			return obj(*args, **kwargs)
-		update_wrapper(_thread_call_wrapper, func)
-		obj.wrapper = _thread_call_wrapper
-		return _thread_call_wrapper
-	
-	def __get__(self, instance, owner=None):
-		if instance is not None:
-			self.methods[forceHash(instance)] = ThreadMethod(self.func.__get__(instance), instance)
-			return self.methods[forceHash(instance)]
-		else:
-			self.methods[forceHash(owner)] = ThreadMethod(self.func.__get__(owner), owner)
-			return self.methods[forceHash(owner)]
-
-def _thread_catch_wrapper(LOG : logging.Logger, future : Future, func : Callable, args : tuple, kwargs : dict[str,Any]):
-	try:
-		future.realize(func(*args, **kwargs))
-	except Exception as e:
-		e.add_note(f"This exception occured in thread: {current_thread()}")
-		LOG.exception(e)
-
 def threaded(func, threadGroup : type[ThreadGroup]=ThreadGroup):
-	from GeekyGadgets.Threads import Thread, ThreadGroup
-	TG = threadGroup()
-	LOG = Logged.LOG.getChild(f"threaded.{func.__qualname__}")
+	"""Creates a wrapper function for `func` that instead starts `func` in another `Thread` object, and returns the 
+	`Future` of that created `Thread` object. If wrapper is called as a method, the threads will all belong to a 
+	collective but instance unique `ThreadGroup` object, or another threadgroup implementation specified by the 
+	keyword argument `threadGroup`. If function is not called as a method, all the threads will be added to a common 
+	threadgroup that does not contain any instance unique threads."""
+	groups = {}
+	groups[0] = threadGroup()
 	def _thread_launcher_wrapper(*args, **kwargs):
-		_thread = Thread(target=func, args=args, kwargs=kwargs, group=TG)
-		TG.add(_thread)
-		_thread.start()
-		return _thread
+		if args and type(args[0]).__name__ == func.__qualname__.split(".")[0]:
+			if id(args[0]) not in groups:
+				groups[id(args[0])] = threadGroup()
+			return Thread(target=func, args=args, kwargs=kwargs, group=groups[id(args[0])]).start()
+		else:
+			return Thread(target=func, args=args, kwargs=kwargs, group=groups[0]).start()
 	update_wrapper(_thread_launcher_wrapper, func)
-	_thread_launcher_wrapper.__annotations__["group"] = ThreadGroup
-	_thread_launcher_wrapper.group = TG
 	return _thread_launcher_wrapper
+
+# class ThreadDescriptor(Logged):
+
+# 	func : FunctionType | MethodType
+# 	wrapper : function
+# 	owner : object
+# 	threadListLock : Lock
+	
+# 	def __call__(self, *args, **kwargs):
+		
+# 		self.LOG.info(f"Starting thread for {callFormat(self.func, args, kwargs)}")
+
+# 		thread = Thread(target=self._funcWrapper, args=args, kwargs=kwargs, daemon=True)
+# 		if hasattr(getattr(self.owner, "_threads", None), "append"):
+# 			self.owner._threads.append(thread)
+# 		thread.start()
+
+# 		self.LOG.info(f"Started thread for {callFormat(self.func, args, kwargs)}")
+# 		return thread
+		
+# 	def __repr__(self):
+# 		return f"<{self.__class__.__name__}({self.func}) at {hex(id(self))}>"
+	
+# 	def __set_name__(self, owner, name):
+# 		if hasattr(self.func, "__set_name__"):
+# 			self.func.__set_name__(self, owner, name)
+# 		self.__name__ = name
+# 		self.owner = owner
+
+# 	def _funcWrapper(self, *args, **kwargs):
+# 		try:
+# 			self.func(*args, **kwargs)
+# 		except Exception as e:
+# 			current_thread().exception = e
+# 			e.add_note(f"This exception occured in a thread running the following function call: {callFormat(self.func, args, kwargs)}")
+# 			self.LOG.exception(e)
+
+# 	def wait(self):
+# 		self.owner.wait()
+
+# class ThreadMethod(ThreadDescriptor):
+
+# 	func : MethodType
+# 	threads : ThreadGroup
+
+# class ThreadFunction(ThreadDescriptor):
+	
+# 	func : FunctionType
+# 	methods : dict
+
+# 	def __new__(cls, func, owner=None):
+# 		obj = super().__new__(cls)
+# 		obj.methods = dict()
+# 		obj.func = func
+# 		obj.owner = owner
+
+# 		def _thread_call_wrapper(*args, **kwargs):
+# 			return obj(*args, **kwargs)
+# 		update_wrapper(_thread_call_wrapper, func)
+# 		obj.wrapper = _thread_call_wrapper
+# 		return _thread_call_wrapper
+	
+# 	def __get__(self, instance, owner=None):
+# 		if instance is not None:
+# 			self.methods[forceHash(instance)] = ThreadMethod(self.func.__get__(instance), instance)
+# 			return self.methods[forceHash(instance)]
+# 		else:
+# 			self.methods[forceHash(owner)] = ThreadMethod(self.func.__get__(owner), owner)
+# 			return self.methods[forceHash(owner)]
