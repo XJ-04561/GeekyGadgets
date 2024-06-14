@@ -1,5 +1,6 @@
 
 from GeekyGadgets.Globals import *
+from GeekyGadgets.Threads import RLock
 
 _NOT_SET = object()
 
@@ -9,15 +10,28 @@ class LimitedDict(dict):
 	
 	
 	LIMIT : int = 10000
-	_lock : threading.Lock
+	_lock : RLock
 
-	def __init__(self, *args, **kwargs):
-		self._lock = threading.Lock()
+	@overload
+	def __init__(self, /): ...
+	@overload
+	def __init__(self, *, limit : int): ...
+	@overload
+	def __init__(self, iterable : Iterable|dict, /): ...
+	@overload
+	def __init__(self, iterable : Iterable|dict, /, *, limit : int): ...
+	def __init__(self, iterable=None, /, *, limit=None):
+		self._lock = RLock()
 		self.N = 0
-		if args and isinstance(args[0], int):
-			self.LIMIT = args[0]
-		elif "limit" in kwargs:
-			self.LIMIT = kwargs["limit"]
+		if limit is not None:
+			self.LIMIT = limit
+		if iterable is None:
+			pass
+		elif isinstance(iterable, Iterable):
+			if isinstance(iterable, dict):
+				iterable = iterable.items()
+			for key, value in iterable:
+				self[key] = value
 	
 	def __setitem__(self, key, value):
 		with self._lock:

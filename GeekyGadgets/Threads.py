@@ -119,6 +119,8 @@ class ThreadGroup:
 		self.writeLock = RLock()
 		with self.writeLock:
 			self._dict = {thread.name:thread for thread in iterable}
+			for thread in self._dict.values():
+				thread.group = self
 
 		if not all(isinstance(t, Thread) for t in self):
 			offenders = list(repr(t) for t in self if not isinstance(t, Thread))
@@ -227,9 +229,12 @@ class Thread(_Thread, Logged):
 			logCopy.add_note(f"This exception occured in thread: {current_thread()}")
 			self.LOG.exception(type(e)(*e.args))
 			self.future.resolve(exception=e)
-
 	
 class DummyLock:
+	def __enter__(self):
+		return self
+	def __exit__(self):
+		pass
 	def acquire(self, blocking: bool = None, timeout: float = None):
 		return True
 	def release(self):
@@ -237,7 +242,6 @@ class DummyLock:
 	@property
 	def locked(self):
 		return False
-
 
 class CursorLike:
 	def __init__(self, data : list):
@@ -400,5 +404,3 @@ class ThreadConnection(Logged):
 	def __del__(self):
 		self.close()
 
-from GeekyGadgets.Classy import Default
-ThreadGroup = Default["_dict"](ThreadGroup.names.fget)

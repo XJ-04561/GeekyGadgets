@@ -1,13 +1,38 @@
 
+CONFIG_DICT = {
+	"version" : 1.0,
+	"video_options" : {
+		"resolution" : [1080, 1920],
+		"anti_aliasing" : "FXAA",
+		"frequency" : 60, # Hz/FPS
+		"driver" : {
+			"name" : "nvidia",
+			"version" : 535
+		}
+	},
+	"controls" : {
+		"mouse" : {
+			"frequency" : 1000,
+			"sensitivity" : 1.2
+		},
+		"keyboard" : {
+			"forward" : 87,
+			"backward" : 83,
+			"left" : 65,
+			"right" : 68,
+			"jump" : 32
+		}
+	}
+}
 
 def test_toml():
+	
 	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
+	os.chdir(os.path.splitext(__file__)[0])
 	
 	config1 = loadTOML("tomlExample.toml")
-	
-	from tomlExample import config as config2
-
+	config2 = CONFIG_DICT
 	config3 = Config.fromDict(config2)
 
 	assert str(config1) == str(config2) == str(config3)
@@ -50,12 +75,12 @@ def test_methods():
 
 	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
+	os.chdir(os.path.splitext(__file__)[0])
 	
 	config1 = loadTOML("tomlExample.toml")
 	
-	from tomlExample import config as _config
 	from copy import deepcopy
-	config3 = deepcopy(_config)
+	config3 = deepcopy(CONFIG_DICT)
 
 	config2 = Config.fromDict(config3)
 
@@ -89,12 +114,12 @@ def test_operators():
 
 	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
+	os.chdir(os.path.splitext(__file__)[0])
 	
 	config1 = loadTOML("tomlExample.toml")
 	
-	from tomlExample import config as _config
 	from copy import deepcopy
-	config3 = deepcopy(_config)
+	config3 = deepcopy(CONFIG_DICT)
 
 	config2 = Config.fromDict(config3)
 

@@ -1,6 +1,6 @@
 
 from GeekyGadgets.Globals import *
-from GeekyGadgets.Hooks import Hooks
+from GeekyGadgets.Hooks import Hooks, GlobalHooks
 from GeekyGadgets.Threads import *
 from GeekyGadgets.Iterators import TakeWhile, Batched
 from GeekyGadgets.This import this
@@ -39,13 +39,6 @@ class ColorStr(str):
 		return type(self)(str.__add__(self, right))
 	def __radd__(self, left):
 		return type(self)(str.__add__(left, self))
-
-yellow = lambda *args, **kwargs : ColorStr(colors.yellow(*args, **kwargs))
-magenta = lambda *args, **kwargs : ColorStr(colors.magenta(*args, **kwargs))
-white = lambda *args, **kwargs : ColorStr(colors.white(*args, **kwargs))
-red = lambda *args, **kwargs : ColorStr(colors.red(*args, **kwargs))
-green = lambda *args, **kwargs : ColorStr(colors.green(*args, **kwargs))
-cyan = lambda *args, **kwargs : ColorStr(colors.cyan(*args, **kwargs))
 
 SQUARE = "="
 HALF_SQUARE = ":"
@@ -172,6 +165,22 @@ def supportsColor():
 		or vt_codes_enabled_in_windows_registry()
 	)
 
+if supportsColor():
+	yellow = lambda *args, **kwargs : ColorStr(colors.yellow(*args, **kwargs))
+	magenta = lambda *args, **kwargs : ColorStr(colors.magenta(*args, **kwargs))
+	white = lambda *args, **kwargs : ColorStr(colors.white(*args, **kwargs))
+	red = lambda *args, **kwargs : ColorStr(colors.red(*args, **kwargs))
+	green = lambda *args, **kwargs : ColorStr(colors.green(*args, **kwargs))
+	cyan = lambda *args, **kwargs : ColorStr(colors.cyan(*args, **kwargs))
+else:
+	yellow = lambda *args, **kwargs : args[0]
+	magenta = lambda *args, **kwargs : args[0]
+	white = lambda *args, **kwargs : args[0]
+	red = lambda *args, **kwargs : args[0]
+	green = lambda *args, **kwargs : args[0]
+	cyan = lambda *args, **kwargs : args[0]
+
+
 class Indicator(Logged):
 	
 	running : bool = False
@@ -221,7 +230,7 @@ class Indicator(Logged):
 		except:
 			pass
 
-	def __init__(self, threads : HitchableDict, symbols : tuple[str], length : int=15, message : str="", sep : str=" ", borders : tuple[str,str]=("[", "]"), crashSymbol="X", finishSymbol=SQUARE, out=sys.stdout, preColor : str=None, partition : str=None, crashColor : str=None, skippedColor : str=None, finishColor : str=None, postColor : str=None, progColor : str=None):
+	def __init__(self, threads : HitchableDict, symbols : tuple[str]=None, length : int=15, message : str="", sep : str=" ", borders : tuple[str,str]=("[", "]"), crashSymbol="X", finishSymbol=SQUARE, out=sys.stdout, preColor : str=None, partition : str=None, crashColor : str=None, skippedColor : str=None, finishColor : str=None, postColor : str=None, progColor : str=None):
 		
 		self.condition = Condition()
 		self.rowLock = Lock()
@@ -239,7 +248,8 @@ class Indicator(Logged):
 		self.message = message.rstrip(":")
 		self.out = out
 
-		self.symbols		= symbols
+		if symbols is not None:
+			self.symbols	= symbols
 		self.sep			= sep
 		self.borders		= borders
 		self.crashSymbol	= crashSymbol
@@ -359,6 +369,20 @@ class Indicator(Logged):
 			self.condition.notify_all()
 		except RuntimeError:
 			pass
+
+class Timer(Indicator):
+
+	symbols : tuple = ()
+
+	@cached_property
+	def rowTemplate(self):
+		return f"{self.message}: [N={len(self.names)}] {{time}}"
+
+	@property
+	def rowGenerator(self) -> Generator[str,None,None]:
+
+		for name in self.names:
+			yield None
 
 class LoadingBar(Indicator):
 
@@ -500,17 +524,27 @@ class TerminalUpdater(Logged):
 	thread : Thread
 	hooks : Hooks
 	out : TextIO
-	printer : Indicator = None
+	indicator : Indicator = None
 
-	def __init__(self, message, category, *args, hooks : Hooks, names : Iterable, out=sys.stdout, printer : Indicator=Spinner, **kwargs):
+	@overload
+	def __init__(self, message, category, names : Iterable[Hashable], /, **kwargs): ...
+	@overload
+	def __init__(self, message, category, N : int, /, **kwargs): ...
+	@overload
+	def __init__(self, message, category, names : Iterable[Hashable], /, hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicator : Indicator=Timer, **indicatorArgs): ...
+	@overload
+	def __init__(self, message, category, N : int, /, hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicator : Indicator=Timer, **indicatorArgs): ...
+	def __init__(self, message, category, names, /, hooks : Hooks=GlobalHooks, out=sys.stdout, indicator : Indicator=Timer, **kwargs):
 		
 		self.startTime = timer()
 		
 		self.message = message
 		self.category = category
 		self.hooks = hooks
+		if isinstance(names, int):
+			names = [f"#{{:0>{len(str(names))}}}".format(i) for i in range(names)]
 		self.threadNames = names
-		self.threads = HitchableDict(map(lambda name : (name,-1.0), names), onSet=self.updatePrinter)
+		self.threads = HitchableDict(map(lambda name : (name,-1.0), names), onSet=self.updateIndicator)
 		self.out = out
 		
 		self.running = True
@@ -532,8 +566,8 @@ class TerminalUpdater(Logged):
 		self.hooks.addHook(f"{self.category}Finished", self.finishedCallback)
 		self.hooks.addHook(f"{self.category}Failed", self.failedCallback)
 
-		if printer is not None:
-			self.setPrinter(printer, *args, **kwargs)
+		if indicator is not None:
+			self.setIndicator(indicator, **kwargs)
 
 	def __enter__(self):
 		self.start()
@@ -548,7 +582,7 @@ class TerminalUpdater(Logged):
 
 	def skippedCallback(self, eventInfo : dict[str,Any]):
 		if eventInfo["name"] in self.threads:
-			self.printer.finishedThreads.add(eventInfo["name"])
+			self.indicator.finishedThreads.add(eventInfo["name"])
 			self.threads[eventInfo["name"]] = 2
 
 	def startingCallback(self, eventInfo : dict[str,Any]):
@@ -565,16 +599,16 @@ class TerminalUpdater(Logged):
 
 	def finishedCallback(self, eventInfo : dict[str,Any]):
 		if eventInfo["name"] in self.threads:
-			self.printer.finishedThreads.add(eventInfo["name"])
+			self.indicator.finishedThreads.add(eventInfo["name"])
 			self.threads[eventInfo["name"]] = 3
 
 	def failedCallback(self, eventInfo : dict[str,Any]):
 		if eventInfo["name"] in self.threads:
 			self.threads[eventInfo["name"]] = None
-			self.printer.finishedThreads.add(eventInfo["name"])
+			self.indicator.finishedThreads.add(eventInfo["name"])
 	
-	def setPrinter(self, printer : Indicator=Spinner, *args, **kwargs):
-		self.printer = printer(self.threads, *args, **({"out":self.out, "message":self.message} | kwargs))
+	def setIndicator(self, indicatorClass : Indicator=Spinner, **kwargs):
+		self.indicator = indicatorClass(self.threads, **({"out":self.out, "message":self.message} | kwargs))
 
 	def start(self, *args, **kwargs):
 		self.thread = Thread(target=self.mainLoop, args=args, kwargs=kwargs, daemon=True)
@@ -585,29 +619,29 @@ class TerminalUpdater(Logged):
 	
 	def kill(self):
 		"""Does not wait for thread to stop."""
-		self.printer.running = False
+		self.indicator.running = False
 		try:
-			self.printer.condition.notify_all()
+			self.indicator.condition.notify_all()
 		except RuntimeError:
 			pass
 
 	def stop(self):
 		"""Waits for thread to stop."""
-		self.printer.running = False
+		self.indicator.running = False
 		try:
-			self.printer.condition.notify_all()
+			self.indicator.condition.notify_all()
 		except RuntimeError:
 			pass
 		self.thread.join()
 
 	def mainLoop(self, *args, **kwargs):
 		try:
-			self.printer.run(*args, **kwargs)
+			self.indicator.run(*args, **kwargs)
 		except Exception as e:
 			self.LOG.exception(e)
 
-	def updatePrinter(self):
+	def updateIndicator(self):
 		try:
-			self.printer.threads = self.threads
+			self.indicator.threads = self.threads
 		except:
 			pass

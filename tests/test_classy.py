@@ -1,5 +1,6 @@
 
 from GeekyGadgets.Classy import *
+import random
 
 def test_default():
 	class GameConstraint(Exception): pass
@@ -152,7 +153,7 @@ def test_threaded():
 	@threaded
 	def func(a : int, b):
 		import time
-		time.sleep(a)
+		time.sleep(a / 4)
 		globalList.append(a * b)
 		return a * b
 	
@@ -173,7 +174,7 @@ def test_threaded():
 		@threaded
 		def work(self, M : float):
 			import time
-			time.sleep(M)
+			time.sleep(M / 4)
 			self.results[M] = self.N*M
 			return self.N*M
 	
