@@ -6,7 +6,7 @@ def main():
 	message : str= input("")
 	for i in range(6):
 		data : str= input("")
-		time.sleep(0.25)
+		time.sleep(0.01)
 		if data.isnumeric():
 			print(int(data)*i)
 

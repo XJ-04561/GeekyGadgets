@@ -3,7 +3,9 @@ from GeekyGadgets.Globals import *
 import urllib.request as ur
 _T = TypeVar("_T")
 
-__all__ = ("URL", "URL_TEMPLATE", "HTTPS", "HTTP", "FTP", "MAILTO", "FILE", "DATA", "IRC")
+__all__ = (
+	"URLError", "AmbiguousURL", "BadURL", "URL", "URL_TEMPLATE", "HTTPS", "HTTP", "FTP", "MAILTO", "FILE", "DATA",
+	"IRC", "ping")
 
 class URLError(Exception): pass
 class AmbiguousURL(URLError): pass

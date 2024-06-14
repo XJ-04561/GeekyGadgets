@@ -1,10 +1,11 @@
 
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Logging import Logged
-from GeekyGadgets.Threads import ThreadConnection, CursorLike, Thread, current_thread, sqlite3
-from GeekyGadgets.Hooks import Hooks
+from GeekyGadgets.URL import URL
+from GeekyGadgets.Threads import ThreadConnection, Thread, sqlite3
+from GeekyGadgets.Hooks import Hooks, GlobalHooks
+from GeekyGadgets.Classy import threaded
 from GeekyGadgets.Paths import Path
-from GeekyGadgets.Formatting import callFormat
 from urllib.request import urlretrieve, HTTPError
 from GeekyGadgets.This import this
 
@@ -141,7 +142,7 @@ class Downloader(Logged):
 	timeStep : float = 0.25
 	database : Path = f"{__module__}_QUEUE.db"
 	jobs : list
-	hooks : Hooks = Hooks.GlobalHooks
+	hooks : Hooks = GlobalHooks
 
 	_queueConnection : ThreadConnection
 	_threads : list[Thread]= []
@@ -184,7 +185,7 @@ class Downloader(Logged):
 			if hasattr(t, "exception"):
 				raise t.exception
 	
-	@threadDescriptor
+	@threaded
 	def download(self, query, filename : str, reportHook : "DownloaderReportHook"=None) -> None:
 		
 		if reportHook:

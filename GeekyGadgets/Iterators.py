@@ -18,9 +18,9 @@ if PYTHON_VERSION < (3, 12):
 				yield ret
 else:
 	from itertools import batched as Batched
-from itertools import chain as Chain, takewhile as TakeWhile, dropwhile as DropWhile, zip_longest as ZipLongest
+from itertools import chain as Chain, takewhile as TakeWhile, dropwhile as DropWhile, zip_longest as ZipLongest, repeat as Repeat
 
-__all__ = ("Batched", "Chain", "TakeWhile", "DropWhile", "ZipLongest", "DropThenTakeWhile", "ChainChain", "Grouper",
+__all__ = ("Batched", "Chain", "Repeat", "TakeWhile", "DropWhile", "ZipLongest", "DropThenTakeWhile", "ChainChain", "Grouper",
 		   "Walker", "LeavesWalker", "BranchesWalker", "ConfigWalker", "AlphaRange")
 
 class AlphaRange:
@@ -179,7 +179,7 @@ class BranchesWalker(Walker):
 #
 
 if "Config" not in globals():
-	from GeekyGadgets.Configs import Config, Category
+	from GeekyGadgets.Configs import Config, ConfigCategory
 
 class ConfigWalker(Walker):
 	"""Iterator that iterates in-order through an iterable and down through all their iterable elements. Going all the
@@ -196,20 +196,20 @@ class ConfigWalker(Walker):
 	_iterator : Config[str,Any]
 
 	@classmethod
-	def recursiveWalk(cls, iterable : Config, root : str=None) -> Generator[tuple[str,str,Category|Any],None,None]:
+	def recursiveWalk(cls, iterable : Config, root : str=None) -> Generator[tuple[str,str,ConfigCategory|Any],None,None]:
 		for name, value in iterable.items():
 			yield (root, name, value)
-			if isinstance(value, Category):
+			if isinstance(value, ConfigCategory):
 				yield from cls.recursiveWalk(value, root=f"{root}.{name}" if root is not None else name)
 	
 	@property
-	def categories(self) -> Generator[tuple[str,str,Category],None,None]:
+	def categories(self) -> Generator[tuple[str,str,ConfigCategory],None,None]:
 		for root, name, value in self:
-			if isinstance(value, Category):
+			if isinstance(value, ConfigCategory):
 				yield (root, name, value)
 	
 	@property
 	def variables(self) -> Generator[tuple[str,str,Any],None,None]:
 		for root, name, value in self:
-			if not isinstance(value, Category):
+			if not isinstance(value, ConfigCategory):
 				yield (root, name, value)

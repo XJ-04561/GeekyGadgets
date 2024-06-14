@@ -3,7 +3,7 @@ from GeekyGadgets.Globals import *
 
 _NOT_SET = object()
 
-__all__ = ("LimitedDict")
+__all__ = ("LimitedDict",)
 
 class LimitedDict(dict):
 	

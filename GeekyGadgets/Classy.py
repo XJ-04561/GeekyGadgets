@@ -1,37 +1,88 @@
 
 from GeekyGadgets.Globals import *
-from GeekyGadgets.Logging import Logged
-from GeekyGadgets.Formatting import callFormat
-from GeekyGadgets.Threads import *
-from GeekyGadgets.Threads import current_thread
-from GeekyGadgets.SpecialTypes import LimitedDict
-from GeekyGadgets.Functions import forceHash
 
-__all__ = ("UninitializedError", "Default", "ClassProperty", "CachedClassProperty", "ThreadMethod", "ThreadFunction", "ThreadDescriptor")
-
-class UninitializedError(AttributeError):
-	def __init__(self, obj=None, name=None, **kwargs):
-		if obj is not None:
-			objName = repr(type(obj).__name__)
-		else:
-			objName = "Object"
-		if name is not None:
-			name = repr(name) + " "
-		else:
-			name = ""
-		super().__init__(f"Attribute {name}of {objName} was accessed, but has yet to be set.", **kwargs)
+__all__ = ("Default", "ClassProperty", "CachedClassProperty", "threaded")
 
 class Default:
-	"""Works similarly to `builtins.property`, but is by default """
+	"""Works similarly to `functools.cached_property`, and has a setter and deleter by default like that of 
+	`functools.cached_property`. But, it allows to have the default value refreshed when some specific dependencies 
+	are changed. THe dependencies can be set either through the `deps` argument to the object constructor, or by 
+	indexing the class itself to create an empty `Default` that only has dependencies set, but no callback function 
+	yet. But calling the created object will forward the arguments to the `Default.__init__` that sets up the object 
+	in full.
+	
+	### Example
+	```python
+	class GameConstraint(Exception): pass
+	class NotEnoughMana(GameConstraint): pass
 
-	deps : tuple = None
+	class Character:
+
+		Strength : int
+		Agility : int
+		Stamina : int
+		Intellect : int
+		Spirit : int
+
+		HP : int = property(lambda self:self._HP, lambda self, value:setattr(self, "_HP", min(value, self.MaxHP)))
+		MP : int = property(lambda self:self._MP, lambda self, value:setattr(self, "_MP", min(value, self.MaxMP)))
+
+		BaseHP = property(lambda self: 5 * self.Stamina)
+		BaseMP = property(lambda self: 5 * self.Intellect)
+
+		MaxHP = Default["Buffs", "BaseHP"](lambda self: self.BaseHP + sum(self.BaseHP * buff for buff in self.Buffs))
+		MaxMP = Default["Buffs", "BaseMP"](lambda self: self.BaseMP + sum(self.BaseMP * buff for buff in self.Buffs))
+		#	OR LIKE THIS
+		@Default["Buffs", "BaseHP"]
+		def MaxHP(self):
+			return self.BaseHP + sum(self.BaseHP * buff for buff in self.Buffs)
+		
+		@Default["Buffs", "BaseMP"]
+		def MaxMP(self):
+			return self.BaseMP + sum(self.BaseMP * buff for buff in self.Buffs)
+
+		Buffs : list[float|int]
+
+		def __init__(self, strength=20, agility=20, stamina=20, intellect=20, spirit=20):
+			self.Strength = strength
+			self.Agility = agility
+			self.Stamina = stamina
+			self.Intellect = intellect
+			self.Spirit = spirit
+			self.Buffs = []
+
+		def addBuff(self, buff : float|int):
+			self.Buffs.append(buff)
+	
+	character = Character()
+	
+	print(character.MaxHP)
+	# 100
+	print(character.MaxMP)
+	# 100
+
+	character.Intellect *= 2
+	print(character.MaxHP)
+	# 100
+	print(character.MaxMP)
+	# 200
+
+	character.addBuff(1.2)
+	print(character.MaxHP)
+	# 120
+	print(character.MaxMP)
+	# 240
+
+	```"""
+
 	name : str
 
 	fget : Callable = None
 	fset : Callable = None
 	fdel : Callable = None
+	deps : tuple
 
-	def __init__(self, fget=None, fset=None, fdel=None, doc=None, deps=(), *, limit : int=10000):
+	def __init__(self, fget=None, fset=None, fdel=None, doc=None, deps : tuple[str]=()):
 		if fget or not self.fget:
 			self.fget = fget
 		if fset or not self.fset:
@@ -39,11 +90,11 @@ class Default:
 		if fdel or not self.fdel:
 			self.fdel = fdel
 		self.__doc__ = doc or fget.__doc__ or getattr(self, "__doc__", None)
-		if deps or not self.deps:
+		if deps or not hasattr(self, "deps"):
 			self.deps = deps
 		
-	def __call__(self, fget=None, fset=None, fdel=None, doc=None, *, limit : int=10000):
-		self.__init__(fget, fset, fdel, doc=doc, limit=limit)
+	def __call__(self, fget=None, fset=None, fdel=None, doc=None):
+		self.__init__(fget, fset, fdel, doc=doc)
 		return self
 	
 	def __class_getitem__(cls, deps):
@@ -55,19 +106,24 @@ class Default:
 		return cls(deps=deps if isinstance(deps, tuple) else (deps, ))
 	
 	def __set_name__(self, owner, name):
-		if hasattr(self.fget, "__annotations__") and hasattr(owner, "__annotations__") and "return" in self.fget.__annotations__:
-			owner.__annotations__[name] = self.fget.__annotations__["return"]
 		self.name = name
+		if "return" in getattr(self.fget, "__annotations__", ()) and self.name not in getattr(owner, "__annotations__", ()):
+			owner.__annotations__[name] = self.fget.__annotations__["return"]
 
 	def __get__(self, instance, owner=None):
+		from GeekyGadgets.Functions import forceHash, getAttrChain
 		if instance is None:
 			return self
-		elif self.name in getattr(instance, "__dict__", ()):
+		if self.name in getattr(instance, "__dict__", ()):
 			return instance.__dict__[self.name]
-		elif "_"+self.name in getattr(instance, "__dict__", ()):
-			return instance.__dict__["_"+self.name]
 		else:
-			instance.__dict__["_"+self.name] = ret = self.fget(instance)
+			currentHash = forceHash(tuple(getAttrChain(instance, dep) for dep in self.deps))
+		
+		if hasattr(instance, "__dict__") and instance.__dict__.get(f"_default_{self.name}", (currentHash+1,))[0] == currentHash:
+			return instance.__dict__[f"_default_{self.name}"][1]
+		else:
+			ret = self.fget(instance)
+			instance.__dict__[f"_default_{self.name}"] = (currentHash, ret)
 			return ret
 	
 	def __set__(self, instance, value):
@@ -76,14 +132,14 @@ class Default:
 		else:
 			self.fset(instance, value)
 	
-	def __delete__(self, instance, owner=None):
+	def __delete__(self, instance):
 			if self.fdel is not None:
 				self.fdel(instance)
 			else:
-				if self.name in instance.__dict__:
+				if self.name in getattr(instance, "__dict__", ()):
 					del instance.__dict__[self.name]
-				if "_"+self.name in instance.__dict__:
-					del instance.__dict__["_"+self.name]
+				if f"_default_{self.name}" in getattr(instance, "__dict__", ()):
+					del instance.__dict__[f"_default_{self.name}"]
 	
 	def setter(self, fset):
 		self.fset = fset
@@ -190,20 +246,19 @@ class CachedClassProperty:
 
 	def __init__(self, func):
 		self.func = func
+		self.classes = {}
 
 	def __get__(self, instance, owner=None):
-		if instance is None and owner is not None:
-			if self.name in owner.__dict__:
-				return owner.__dict__[self.name]
-			ret = self.func(owner)
-			setattr(owner, self.name, ret)
-			return ret
-		else:
-			if self.name in instance.__dict__:
+		if instance is not None:
+			if self.name in getattr(instance, "__dict__", ()):
 				return instance.__dict__[self.name]
-			ret = self.func(instance)
-			setattr(instance, self.name, ret)
-			return ret
+			instance.__dict__[self.name] = self.func(instance)
+			return instance.__dict__[self.name]
+		else:
+			if id(owner) in self.classes:
+				return self.classes[id(owner)]
+			self.classes[id(owner)] = self.func(owner)
+			return self.classes[id(owner)]
 	
 	def __set__(self, instance, value):
 		instance.__dict__ = value
@@ -217,7 +272,12 @@ class CachedClassProperty:
 	def __repr__(self):
 		return f"{object.__repr__(self)[:-1]} name={self.name!r}>"
 
-def threaded(func, threadGroup : type[ThreadGroup]=ThreadGroup):
+try:
+	from GeekyGadgets.Threads import Thread, ThreadGroup, Future
+except ImportError:
+	pass
+
+def threaded(func, threadGroup : type["ThreadGroup"]=ThreadGroup):
 	"""Creates a wrapper function for `func` that instead starts `func` in another `Thread` object, and returns the 
 	`Future` of that created `Thread` object. If wrapper is called as a method, the threads will all belong to a 
 	collective but instance unique `ThreadGroup` object, or another threadgroup implementation specified by the 
@@ -225,81 +285,21 @@ def threaded(func, threadGroup : type[ThreadGroup]=ThreadGroup):
 	threadgroup that does not contain any instance unique threads."""
 	groups = {}
 	groups[0] = threadGroup()
+	if "." in func.__qualname__:
+		ownerName = func.__qualname__.split(".")[-2]
+	else:
+		ownerName = None
 	def _thread_launcher_wrapper(*args, **kwargs):
-		if args and type(args[0]).__name__ == func.__qualname__.split(".")[0]:
-			if id(args[0]) not in groups:
-				groups[id(args[0])] = threadGroup()
-			return Thread(target=func, args=args, kwargs=kwargs, group=groups[id(args[0])]).start()
+		if args and type(args[0]).__name__.split(".")[-1] == ownerName:
+			group = groups.get(id(args[0]))
+			if group is None:
+				groups[id(args[0])] = group = threadGroup()
 		else:
-			return Thread(target=func, args=args, kwargs=kwargs, group=groups[0]).start()
+			group = groups[0]
+		print(groups)
+		t = Thread(target=func, args=args, kwargs=kwargs, group=group)
+		t.start()
+		return t.future
 	update_wrapper(_thread_launcher_wrapper, func)
+	_thread_launcher_wrapper.__annotations__["return"] = Future
 	return _thread_launcher_wrapper
-
-# class ThreadDescriptor(Logged):
-
-# 	func : FunctionType | MethodType
-# 	wrapper : function
-# 	owner : object
-# 	threadListLock : Lock
-	
-# 	def __call__(self, *args, **kwargs):
-		
-# 		self.LOG.info(f"Starting thread for {callFormat(self.func, args, kwargs)}")
-
-# 		thread = Thread(target=self._funcWrapper, args=args, kwargs=kwargs, daemon=True)
-# 		if hasattr(getattr(self.owner, "_threads", None), "append"):
-# 			self.owner._threads.append(thread)
-# 		thread.start()
-
-# 		self.LOG.info(f"Started thread for {callFormat(self.func, args, kwargs)}")
-# 		return thread
-		
-# 	def __repr__(self):
-# 		return f"<{self.__class__.__name__}({self.func}) at {hex(id(self))}>"
-	
-# 	def __set_name__(self, owner, name):
-# 		if hasattr(self.func, "__set_name__"):
-# 			self.func.__set_name__(self, owner, name)
-# 		self.__name__ = name
-# 		self.owner = owner
-
-# 	def _funcWrapper(self, *args, **kwargs):
-# 		try:
-# 			self.func(*args, **kwargs)
-# 		except Exception as e:
-# 			current_thread().exception = e
-# 			e.add_note(f"This exception occured in a thread running the following function call: {callFormat(self.func, args, kwargs)}")
-# 			self.LOG.exception(e)
-
-# 	def wait(self):
-# 		self.owner.wait()
-
-# class ThreadMethod(ThreadDescriptor):
-
-# 	func : MethodType
-# 	threads : ThreadGroup
-
-# class ThreadFunction(ThreadDescriptor):
-	
-# 	func : FunctionType
-# 	methods : dict
-
-# 	def __new__(cls, func, owner=None):
-# 		obj = super().__new__(cls)
-# 		obj.methods = dict()
-# 		obj.func = func
-# 		obj.owner = owner
-
-# 		def _thread_call_wrapper(*args, **kwargs):
-# 			return obj(*args, **kwargs)
-# 		update_wrapper(_thread_call_wrapper, func)
-# 		obj.wrapper = _thread_call_wrapper
-# 		return _thread_call_wrapper
-	
-# 	def __get__(self, instance, owner=None):
-# 		if instance is not None:
-# 			self.methods[forceHash(instance)] = ThreadMethod(self.func.__get__(instance), instance)
-# 			return self.methods[forceHash(instance)]
-# 		else:
-# 			self.methods[forceHash(owner)] = ThreadMethod(self.func.__get__(owner), owner)
-# 			return self.methods[forceHash(owner)]

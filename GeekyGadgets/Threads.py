@@ -2,7 +2,6 @@
 
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Logging import Logged
-from GeekyGadgets.Classy import Default
 
 import sqlite3
 from queue import Queue, Empty as EmptyQueueException
@@ -43,6 +42,7 @@ class Future:
 	exception : Exception
 	thread : "Thread"
 	resolveEvent : Event
+	group : "ThreadGroup" = property(lambda self:self.thread.group)
 
 	def __init__(self, thread):
 		self.thread = thread
@@ -111,7 +111,6 @@ class Future:
 class ThreadGroup:
 	
 	_dict : dict[str,"Thread"]
-	_names : list[str]
 
 	writeLock : RLock
 	names : list[str]
@@ -120,7 +119,6 @@ class ThreadGroup:
 		self.writeLock = RLock()
 		with self.writeLock:
 			self._dict = {thread.name:thread for thread in iterable}
-			self._names = list(self._dict.keys())
 
 		if not all(isinstance(t, Thread) for t in self):
 			offenders = list(repr(t) for t in self if not isinstance(t, Thread))
@@ -134,21 +132,16 @@ class ThreadGroup:
 			yield thread
 
 	def __getitem__(self, key : int|str) -> "Thread":
-		return self._dict[self._names[key]] if isinstance(key, int) else self._dict[key]
+		return self._dict[self.names[key]] if isinstance(key, int) else self._dict[key]
 	
-	@Default["_names"]
+	@property
 	def names(self) -> list[str]:
-		return [name for name in self._names]
+		return list(self._dict.keys())
 
 	def add(self, thread : "Thread") -> int:
 		with self.writeLock:
-			if thread.name not in self._dict:
-				self._names.append(thread.name)
-				i = len(self._names) - 1
-			else:
-				i = self._names.index(thread.name)
 			self._dict[thread.name] = thread
-		return i
+		return len(self.names)
 	
 	@overload
 	def __or__(self, other : "ThreadGroup") -> "ThreadGroup": ...
@@ -179,15 +172,26 @@ class ThreadGroup:
 	
 	@property
 	def alive(self):
-		return tuple(map(Thread.is_alive, self))
+		return tuple(t.alive for t in self)
 	
 	@property
 	def anyAlive(self):
-		return any(t.is_alive for t in self)
+		return any(t.alive for t in self)
 	
 	@property
 	def allAlive(self):
-		return all(t.is_alive for t in self)
+		return all(t.alive for t in self)
+	
+	@property
+	def futures(self):
+		"""`tuple` of the threads' `Future` objects."""
+		return tuple(t.future for t in self)
+	
+	@property
+	def results(self):
+		"""`tuple` of the threads' return-values, where the values of threads who have yet to 
+		return are replaced with `None`."""
+		return tuple(t.future.call() if t.future.ready else None for t in self)
 
 class Thread(_Thread, Logged):
 	
@@ -204,9 +208,14 @@ class Thread(_Thread, Logged):
 		self.target = target
 		self.post = post
 		self.group = group
-		self.group.add(self)
+		if self.group:
+			self.group.add(self)
 		self.future = Future(self)
 	
+	@property
+	def alive(self):
+		return self.is_alive()
+
 	def wrapper(self, *args, **kwargs):
 		try:
 			if self.pre: self.pre(*args, **kwargs)
@@ -219,6 +228,7 @@ class Thread(_Thread, Logged):
 			self.LOG.exception(type(e)(*e.args))
 			self.future.resolve(exception=e)
 
+	
 class DummyLock:
 	def acquire(self, blocking: bool = None, timeout: float = None):
 		return True
@@ -389,3 +399,6 @@ class ThreadConnection(Logged):
 
 	def __del__(self):
 		self.close()
+
+from GeekyGadgets.Classy import Default
+ThreadGroup = Default["_dict"](ThreadGroup.names.fget)

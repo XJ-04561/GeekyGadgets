@@ -5,6 +5,8 @@ if PYTHON_VERSION < (3, 11):
 else:
 	import tomllib as toml # type: ignore
 
+__all__ = ("loadTOML", "Config", "ConfigCategory")
+
 _NOT_SET = object()
 _NO_DEFAULT = object()
 _NOT_FOUND = object()
@@ -12,13 +14,13 @@ _NO_TYPE = type("_NO_TYPE", (), {})
 _D = TypeVar("_D", bound=dict[str,Any])
 
 class FlagNotFound(KeyError):
-	def __init__(self, flag : str, config : Union["Config","Category"]) -> None:
+	def __init__(self, flag : str, config : Union["Config","ConfigCategory"]) -> None:
 		super().__init__(f"Flag {flag!r} not found in {config!r}.")
 
 class Config(dict):
 	"""A `dict`-like object that stores values and sub-categories under a given `str` object denoted as *flags*. 
-	`Category` objects directly inherit from `Config`. No `Config` object should contain other `Config` objects, 
-	only `Category` objects.
+	`ConfigCategory` objects directly inherit from `Config`. No `Config` object should contain other `Config` objects, 
+	only `ConfigCategory` objects.
 	
 	A flag/category can be accessed either by it's name, or the hierarchy it is under plus its name. Hierachy is 
 	indicated by separating flags with `.`, like: `gameConfig["video_options.driver.version"] == 535`.
@@ -71,7 +73,7 @@ class Config(dict):
 	"""
 
 	_LOCK : threading.Lock
-	CATEGORY_CLASS : type["Category"]
+	CATEGORY_CLASS : type["ConfigCategory"]
 	_DEFAULT : Any
 	
 	@overload
@@ -104,13 +106,13 @@ class Config(dict):
 	@overload
 	def fromDict(cls : type["Config"], d : dict, *, default : Any) -> "Config": ...
 	@overload
-	def fromDict(cls : type["Category"], d : dict) -> "Category": ...
+	def fromDict(cls : type["ConfigCategory"], d : dict) -> "ConfigCategory": ...
 	@overload
-	def fromDict(cls : type["Category"], d : dict, *, default : Any) -> "Category": ...
+	def fromDict(cls : type["ConfigCategory"], d : dict, *, default : Any) -> "ConfigCategory": ...
 	@classmethod
 	def fromDict(cls, d, *, default=_NO_DEFAULT, obj : "Config"=None):
 		"""Converts a dict to a `Config` object, with all underlying dictionaries being converted 
-		to `Category` objects."""
+		to `ConfigCategory` objects."""
 		if obj is None:
 			obj = cls((), default=default)
 		categoryType = getattr(d, "CATEGORY_CLASS", dict)
@@ -285,7 +287,7 @@ class Config(dict):
 		return tuple(super().keys())
 	
 	@property
-	def categories(self) -> Generator[tuple[str,"Category"],None,None]:
+	def categories(self) -> Generator[tuple[str,"ConfigCategory"],None,None]:
 		from GeekyGadgets.Iterators import ConfigWalker
 		for root, name, value in ConfigWalker(self).categories:
 			yield (name, value)
@@ -296,9 +298,9 @@ class Config(dict):
 		for root, name, value in ConfigWalker(self).variables:
 			yield (name, value)
 
-class Category(Config): pass
+class ConfigCategory(Config): pass
 
-Config.CATEGORY_CLASS = Category
+Config.CATEGORY_CLASS = ConfigCategory
 
 @overload
 def loadTOML(filename) -> Config[str,Any]: ...

@@ -26,6 +26,11 @@ class Subscriptable(ABC):
 	@abstractmethod
 	def __getitem__(self, key):
 		raise NotImplementedError()
+Subscriptable.register(list)
+Subscriptable.register(tuple)
+Subscriptable.register(dict)
+Subscriptable.register(str)
+Subscriptable.register(bytes)
 
 class Mode: pass
 class ReadMode: pass

@@ -1,7 +1,7 @@
 
 
 def test_toml():
-	from GeekyGadgets.Configs import loadTOML, Config, Category, FlagNotFound
+	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
 	
 	config1 = loadTOML("tomlExample.toml")
@@ -48,7 +48,7 @@ def test_toml():
 
 def test_methods():
 
-	from GeekyGadgets.Configs import loadTOML, Config, Category, FlagNotFound
+	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
 	
 	config1 = loadTOML("tomlExample.toml")
@@ -59,7 +59,7 @@ def test_methods():
 
 	config2 = Config.fromDict(config3)
 
-	config3["new_section"] = Category()
+	config3["new_section"] = ConfigCategory()
 	
 	assert config2 != config3
 
@@ -87,7 +87,7 @@ def test_methods():
 
 def test_operators():
 
-	from GeekyGadgets.Configs import loadTOML, Config, Category, FlagNotFound
+	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
 	
 	config1 = loadTOML("tomlExample.toml")
@@ -102,7 +102,7 @@ def test_operators():
 	assert config2 | config2 == config2
 	assert config3 | config3 == config3
 
-	config3["new_section"] = Category()
+	config3["new_section"] = ConfigCategory()
 
 	assert config1 | config3 == config3
 	assert config3 | config1 == config3

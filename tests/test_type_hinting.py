@@ -15,6 +15,9 @@ def test_isinstance():
 		iterable : myList[int]
 		def __init__(self, iterable):
 			self.iterable = myList(iterable)
+		
+		def __getitem__(self, key):
+			return self.iterable[key]
 	
 	assert isinstance(myList(), Subscriptable)
 	assert isinstance(myThing([1,2,3]).iterable, myList)
