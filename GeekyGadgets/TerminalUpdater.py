@@ -1,299 +1,70 @@
 
 from GeekyGadgets.Globals import *
-from GeekyGadgets.Hooks import Hooks, GlobalHooks
+from GeekyGadgets.Hooks import Hooks, GlobalHooks, HookedDict
 from GeekyGadgets.Threads import *
 from GeekyGadgets.Iterators import TakeWhile, Batched
 from GeekyGadgets.This import this
 from GeekyGadgets.Logging import Logged
 from GeekyGadgets.Classy import Default
 from GeekyGadgets.Formatting import timeFormat
-
-import colors
+from GeekyGadgets.Colors.ANSI import *
+from GeekyGadgets.IO import RePrinter
 
 __all__ = ("LoadingBar", "Spinner", "TextProgress", "TerminalUpdater")
 
 _NOT_FOUND = object()
 
-class ColorStr(str):
-	def __format__(self, fs : str):
-		for s in ["^", "<", ">"]:
-			if s in fs:
-				filler, rest = fs.split(s, 1)
-				if not filler:
-					filler = " "
-				size = int("".join(tuple(TakeWhile(*this.isnumeric(),rest))))
-				direction = s
-				break
-		else:
-			return super().__format__(fs)
-		l = len(Printer.ANSI_REMOVE(self))
-		match direction:
-			case "<":
-				return self + filler * max(size - l, 0)
-			case "^":
-				return filler*(max(size - l, 0) // 2)+self+filler*(max(size - l, 0) // 2 + max(size - l, 0) % 2)
-			case ">":
-				return filler * max(size - l, 0) + self
-	
-	def __add__(self, right):
-		return type(self)(str.__add__(self, right))
-	def __radd__(self, left):
-		return type(self)(str.__add__(left, self))
-
-SQUARE = "="
-HALF_SQUARE = ":"
-
-class Printer:
-
-	LOCK : Lock = Lock()
-	ANSI_MATCH = re.compile("\u001b.*?m|\x1b.*?m")
-
-	@property
-	def terminalWidth(self):
-		if ISATTY:
-			return os.get_terminal_size()[0]
-		else:
-			return 80
-
-	@staticmethod
-	def ANSI_REMOVE(string):
-		return Printer.ANSI_MATCH.sub("", string)
-
-	def __init__(self, out=sys.stdout):
-		self.out = out
-		self.last = 0
-	
-	def __call__(self, msg):
-		with self.LOCK:
-			if supportsColor():
-				if self.last:
-					print("\r"+"\033[A"*((self.last-1) // self.terminalWidth), end=msg, flush=True, file=self.out)
-				else:
-					print("\r", end=msg, flush=True, file=self.out)
-				self.last = len(self.ANSI_REMOVE(msg))
-			else:
-				print("\b"*self.last, end=msg, flush=True, file=self.out)
-				self.last = len(self.ANSI_REMOVE(msg))
-	
-	def clear(self):
-		with self.LOCK:
-			if supportsColor():
-				if self.last:
-					back = "\r"+"\033[A"*((self.last-1) // self.terminalWidth)
-				else:
-					back = "\r"
-				print(back+" "*self.last, end=back, flush=True, file=self.out)
-				self.last = 0
-			else:
-				print("\b"*self.last+" "*self.last, end="\b"*self.last, flush=True, file=self.out)
-				self.last = 0
-
-class HitchableDict(dict):
-
-	onSet : Callable = None
-
-	def __new__(cls, *args, **kwargs):
-		obj = super().__new__(cls, *args, **kwargs)
-		return obj
-
-	def __init__(self, data, onSet=None, **kwargs):
-		super().__init__(data, **kwargs)
-		self.onSet = onSet
-
-	def __setitem__(self, key, value):
-		super().__setitem__(key, value)
-		if self.onSet is not None:
-			self.onSet()
-
-# Taken from django @ https://github.com/django/django/blob/main/django/core/management/color.py
-@cache
-def supportsColor():
-	"""
-	From django @ https://github.com/django/django/blob/main/django/core/management/color.py
-	Return True if the running system's terminal supports color,
-	and False otherwise.
-	"""
-	import sys, os
-	try:
-		import colorama # type: ignore
-
-		# Avoid initializing colorama in non-Windows platforms.
-		colorama.just_fix_windows_console()
-	except (
-		AttributeError,  # colorama <= 0.4.6.
-		ImportError,  # colorama is not installed.
-		# If just_fix_windows_console() accesses sys.stdout with
-		# WSGIRestrictedStdout.
-		OSError,
-	):
-		HAS_COLORAMA = False
-	else:
-		HAS_COLORAMA = True
-
-	def vt_codes_enabled_in_windows_registry():
-		"""
-		Check the Windows Registry to see if VT code handling has been enabled
-		by default, see https://superuser.com/a/1300251/447564.
-		"""
-		try:
-			# winreg is only available on Windows.
-			import winreg
-		except ImportError:
-			return False
-		else:
-			try:
-				reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Console")
-				reg_key_value, _ = winreg.QueryValueEx(reg_key, "VirtualTerminalLevel")
-			except FileNotFoundError:
-				return False
-			else:
-				return reg_key_value == 1
-
-	# isatty is not always implemented, #6223.
-	is_a_tty = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
-
-	return is_a_tty and (
-		sys.platform != "win32"
-		or (HAS_COLORAMA and getattr(colorama, "fixed_windows_console", False))
-		or "ANSICON" in os.environ
-		or
-		# Windows Terminal supports VT codes.
-		"WT_SESSION" in os.environ
-		or
-		# Microsoft Visual Studio Code's built-in terminal supports colors.
-		os.environ.get("TERM_PROGRAM") == "vscode"
-		or vt_codes_enabled_in_windows_registry()
-	)
-
-if supportsColor():
-	yellow = lambda *args, **kwargs : ColorStr(colors.yellow(*args, **kwargs))
-	magenta = lambda *args, **kwargs : ColorStr(colors.magenta(*args, **kwargs))
-	white = lambda *args, **kwargs : ColorStr(colors.white(*args, **kwargs))
-	red = lambda *args, **kwargs : ColorStr(colors.red(*args, **kwargs))
-	green = lambda *args, **kwargs : ColorStr(colors.green(*args, **kwargs))
-	cyan = lambda *args, **kwargs : ColorStr(colors.cyan(*args, **kwargs))
-else:
-	yellow = lambda *args, **kwargs : args[0]
-	magenta = lambda *args, **kwargs : args[0]
-	white = lambda *args, **kwargs : args[0]
-	red = lambda *args, **kwargs : args[0]
-	green = lambda *args, **kwargs : args[0]
-	cyan = lambda *args, **kwargs : args[0]
-
-
 class Indicator(Logged):
 	
-	running : bool = False
+	FINISHED : bool = property(lambda self: all(value in self.FINISHED_CODES for value in self.threads.values()))
+	RUN_LOCK : RLock = Default(lambda self: RLock())
+	STOP : bool = False
+	FINISHED_CODES = (2, 3, None)
+	FAST_UPDATE = True
+	
+	out : TextIO = Default(lambda self: sys.stdout)
+	rowLock : RLock = Default(lambda self: RLock())
+	refresh : Event = Default(lambda self: Event())
+	threads : HookedDict[str,float]
+	running : bool = property(lambda self: self.RUN_LOCK.acquire(False))
 
-	_symbols : list[str]
-	sep : str
-	_borders : tuple[str,str]
-	crashSymbol : str
-	finishSymbol : str
-	_threads : dict[str,float]
-	condition : Condition
-	finishedThreads : set
-	names : list[str]
+	color : AnsiTheme = DefaultTheme
+	sep : str = " "
+	symbols : tuple[str]
+	borders : tuple[str,str] = ("[", "]")
+	finishSymbol : str = "="
+	crashSymbol : str = "X"
 	rowTemplate : str
-	rowLock : Lock
-
-	backspaces : str
-	whitespaces : str
-
-	sepLength : int
-	borderLength : int
-	innerLength : int
-	length : int
 	
-	@property
-	def terminalWidth(self):
-		if ISATTY:
-			return os.get_terminal_size()[0]
-		else:
-			return 80
+	length : int = Default["width"](lambda self: min(max(map(len, self.names)), self.width-2*self.sepLength))
+	sepLength : int	= property(lambda self:len(self.sep))
+	borderLength : int = property(lambda self:sum(len(self.borders[0]), len(self.borders[1])))
+	innerLength : int = property(lambda self:self.length - self.borderLength)
 	
-	@property
-	def threads(self) -> HitchableDict[str,float]:
-		return self._threads
+	width : int = property(lambda self: os.get_terminal_size()[0] if ISATTY else 80, lambda self, value: setattr(self, "DEFAULT_WIDTH", value))
 	
-	@threads.setter
-	def threads(self, threads : HitchableDict[str,float]):
-		with self.rowLock:
-			self._threads = threads
-			self.names = sorted(threads.keys())
-			self.shortKeys = [name if len(name) < self.length else name[:self.length-3]+"..." for name in self.names]
-			self.N = len(self.names)
-			self.entries = list(map(lambda _:" "*self.innerLength, range(self.N)))
-			self.finishedThreads.intersection_update(self._threads)
-		try:
-			self.condition.notify()
-		except:
-			pass
+	names : tuple[str] = Default["threads"](lambda self: tuple(sorted(self.threads.keys())))
+	shortKeys : tuple[str] = Default["threads"](lambda self: [name if len(name) < self.length else name[:self.length-3]+"..." for name in self.names])
+	N : int = Default["threads"](lambda self: len(self.names))
 
-	def __init__(self, threads : HitchableDict, symbols : tuple[str]=None, length : int=15, message : str="", sep : str=" ", borders : tuple[str,str]=("[", "]"), crashSymbol="X", finishSymbol=SQUARE, out=sys.stdout, preColor : str=None, partition : str=None, crashColor : str=None, skippedColor : str=None, finishColor : str=None, postColor : str=None, progColor : str=None):
+	@overload
+	def __init__(self, /, message : str, ): ...
+	@overload
+	def __init__(self, /, message : str, threads : HookedDict): ...
+	@overload
+	def __init__(self, /, message : str, threads : HookedDict, length : int): ...
+	@overload
+	def __init__(self, /, message : str, threads : HookedDict, length : int, *, out : TextIO, color : AnsiTheme, width : int, refresh : Event, rowLock : RLock): ...
+	def __init__(self, /, message : str, threads : HookedDict, length : int=None, **kwargs):
 		
-		self.condition = Condition()
-		self.rowLock = Lock()
-
-		self.preColor		= partial(yellow, bg="black")
-		self.progColor		= partial(magenta, bg="black")
-		self.partition		= partial(white, bg="black")
-		self.crashColor		= partial(red, bg="black")
-		self.skippedColor	= partial(red, bg="blue")
-		self.finishColor	= partial(green, bg="black")
-		self.postColor		= partial(cyan, bg="black")
-
-		self.n = 0
-
-		self.message = message.rstrip(":")
-		self.out = out
-
-		if symbols is not None:
-			self.symbols	= symbols
-		self.sep			= sep
-		self.borders		= borders
-		self.crashSymbol	= crashSymbol
-		self.finishSymbol	= finishSymbol
-
-		self.length = length
-
-		self.finishedThreads = set()
+		self.message = message
 		self.threads = threads
-	
-	@property
-	def symbols(self) -> tuple[str]:
-		return self._symbols
-	@symbols.setter
-	def symbols(self, value):
-		self._symbols = tuple(value)
-		
-	@property
-	def borders(self) -> tuple[str,str]:
-		return self._borders
-	@borders.setter
-	def borders(self, value):
-		self._borders = tuple(value)
+		self.length = length or self.length
+		for name, value in kwargs.items():
+			setattr(self, name, value)
 
-	@Default["length", "borderLength"]
-	def innerLength(self):
-		return self.length - self.borderLength
-
-	@Default["sep"]
-	def sepLength(self):
-		return len(self.sep)
-
-	@Default["borders"]
-	def borderLength(self):
-		return len(self.borders[0]) + len(self.borders[1])
-
-	@Default["borderLength", "sepLength"]
-	def outerLength(self):
-		return self.borderLength + self.sepLength
-	
-	@cache
-	def createRowTemplate(self, width : int, N : int) -> tuple[str, str, str]:
-		"""createRowTemplate(self, width : int) -> backspaces, whitespaces, rowTemplate
-		"""
+	@Default["width", "N"]
+	def rowTemplate(self, width, N) -> str:
 		firstRow = f"{self.message}: {{time:<{width-2-len(self.message)}}}"
 		spacerRow = " " * width
 		
@@ -315,10 +86,6 @@ class Indicator(Logged):
 		return "".join(rowTemplate)
 
 	@property
-	def rowTemplate(self) -> str:
-		return self.createRowTemplate(self.terminalWidth, self.N)
-
-	@property
 	def rowGenerator(self) -> Generator[tuple[int,str],None,None]:
 		"""Progress special cases:
 		None	-	Service crashed
@@ -333,46 +100,50 @@ class Indicator(Logged):
 	def run(self):
 		
 		startTime = timer()
-		self.running = True
-		flushPrint = Printer(self.out)
+		flushPrint = RePrinter(self.out)
 
-		with self.condition:
-			while self.running:
+		with self.RUN_LOCK:
+			while not self.FINISHED and not self.STOP:
 				with self.rowLock:
 					flushPrint(self.rowTemplate.format(time=timeFormat(timer()-startTime), names=self.shortKeys, bars=tuple(self.rowGenerator)))
 				
-				if self.checkDone(): break
+				if self.FINISHED or self.STOP: break
 
 				sleep(0.1)
-				self.condition.wait(timeout=0.40)
+				self.refresh.wait(timeout=0.40)
 			
 			with self.rowLock:
 				if None in self.threads.values():
-					flushPrint((self.rowTemplate).format(time=red('Failed!')+" "+timeFormat(timer()-startTime), names=self.shortKeys, bars=tuple(self.rowGenerator)))
-				elif self.finishedThreads.issuperset(self.threads):
+					flushPrint(self.rowTemplate.format(time=self.color.bad('Failed!')+" "+timeFormat(timer()-startTime), names=self.shortKeys, bars=tuple(self.rowGenerator)))
+				elif self.FINISHED:
 					flushPrint.clear()
-					flushPrint(self.message+": "+green('Done!')+" "+timeFormat(timer()-startTime))
+					flushPrint(self.message+": "+self.color.good('Done!')+" "+timeFormat(timer()-startTime))
 				else:
-					flushPrint((self.rowTemplate).format(time=yellow('Interrupted!')+" "+timeFormat(timer()-startTime), names=self.shortKeys, bars=tuple(self.rowGenerator)))
+					flushPrint(self.rowTemplate.format(time=self.color.warning('Interrupted!')+" "+timeFormat(timer()-startTime), names=self.shortKeys, bars=tuple(self.rowGenerator)))
 				print(flush=True, file=self.out)
-	
-	def checkDone(self):
-		if all(v is None or v == 2 or v == 3 for v in self.threads.values()):
-			self.running = False
-			return True
-		else:
-			return False
+
+	def update(self):
+		if self.FAST_UPDATE:
+			self.refresh.set()
+
+	def wait(self, timeout : float=None) -> bool:
+		ret = self.RUN_LOCK.acquire(timeout=timeout)
+		self.RUN_LOCK.release()
+		return ret
 
 	def kill(self):
-		self.running = False
-		try:
-			self.condition.notify_all()
-		except RuntimeError:
-			pass
+		self.STOP = True
+		self.refresh.set()
+	
+	def stop(self):
+		self.STOP = True
+		self.refresh.set()
+		with self.RUN_LOCK:
+			return
 
 class Timer(Indicator):
 
-	symbols : tuple = ()
+	FAST_UPDATE = False
 
 	@cached_property
 	def rowTemplate(self):
@@ -380,16 +151,19 @@ class Timer(Indicator):
 
 	@property
 	def rowGenerator(self) -> Generator[str,None,None]:
-
 		for name in self.names:
 			yield None
 
 class LoadingBar(Indicator):
+	
+	symbols = Default["fill", "halfFill", "background"](lambda self: (self.fill, self.halfFill, self.background))
 
-	def __init__(self, threads, length=15, fill=SQUARE, halfFill=HALF_SQUARE, background=" ", **kwargs):
-		super().__init__(threads, [fill, halfFill, background], length=length, **kwargs)
-		self.innerLength = length - self.borderLength
+	fill : str = "="
+	halfFill : str = ":"
+	background : str = " "
 
+	n = 0
+	
 	@property
 	def rowGenerator(self) -> Generator[str,None,None]:
 		"""Progress special cases:
@@ -400,44 +174,35 @@ class LoadingBar(Indicator):
 		<0		-	Not started
 		1.0		-	Postprocessing
 		"""
-		crashString = self.borders[0]+self.crashColor(self.crashSymbol * self.innerLength)+self.borders[1]
-		finishString = self.borders[0]+self.finishColor(self.symbols[0] * self.innerLength)+self.borders[1]
-		skippedString = self.borders[0]+self.skippedColor(self.symbols[0] * self.innerLength)+self.borders[1]
+		crashString = self.borders[0]+self.color.bad(self.crashSymbol * self.innerLength)+self.borders[1]
+		finishString = self.borders[0]+self.color.good(self.finishSymbol * self.innerLength)+self.borders[1]
+		skippedString = self.borders[0]+self.color.good(self.fill * self.innerLength)+self.borders[1]
 		
 		for name, prog in zip(self.names, map(self.threads.get, self.names)):
 			if prog is None:
 				yield crashString
 			elif prog == 2:
 				yield skippedString
-			elif name in self.finishedThreads:
+			elif self.threads[name] in self.FINISHED_CODES:
 				yield finishString
 			elif 0 <= prog < 1.0:
 				fillLength = int(self.innerLength*2*prog)
 				fillLength, halfBlock = fillLength//2, fillLength%2
 				
-				yield self.borders[0]+self.progColor(f"{self.symbols[0]*fillLength}{self.symbols[1]*halfBlock}")+self.partition(f"{self.symbols[2]*(self.innerLength - fillLength - halfBlock)}")+self.borders[1]
+				yield self.borders[0]+self.color.progress(f"{self.fill*fillLength}{self.halfFill*halfBlock}")+self.color.primary(f"{self.background*(self.innerLength - fillLength - halfBlock)}")+self.borders[1]
 			elif prog < 0:
-				yield self.borders[0]+self.preColor(self.symbols[2]*self.n + self.symbols[0] + self.symbols[2]*(self.innerLength - self.n - 1))+self.borders[1]
+				yield self.borders[0]+self.color.pre(self.background*self.n + self.fill + self.background*(self.innerLength - self.n - 1))+self.borders[1]
 			elif prog == 1:
-				yield self.borders[0]+self.postColor(self.symbols[0]*self.n + self.symbols[2] + self.symbols[0]*(self.innerLength - self.n - 1))+self.borders[1]
+				yield self.borders[0]+self.color.post(self.fill*self.n + self.background + self.fill*(self.innerLength - self.n - 1))+self.borders[1]
 			else:
 				yield crashString
 		self.n = (self.n+1) % self.innerLength
 
 class Spinner(Indicator):
 
-	symbols : list[str] = ["|", "/", "-", "\\"]
+	FAST_UPDATE = False
 
-	@overload
-	def __init__(self, threads: HitchableDict, symbols: tuple[str]=["|", "/", "-", "\\"], length: int = 15,
-			  message: str = "", sep: str = " ", borders: tuple[str, str] = ("[", "]"), crashSymbol="X",
-			  finishSymbol=SQUARE, out=sys.stdout, preColor: str = None, partition: str = None,
-			  crashColor: str = None, skippedColor: str = None, finishColor: str = None,
-			  postColor: str = None, progColor: str = None): ...
-	def __init__(self, *args, **kwargs):
-		if len(args) < 2 and "symbols" not in kwargs:
-			args = (*args[:1], self.symbols, *args[1:])
-		super().__init__(*args, **kwargs)
+	symbols : list[str] = ["|", "/", "-", "\\"]
 
 	@property
 	def rowGenerator(self) -> Generator[tuple[int,str],None,None]:
@@ -450,23 +215,23 @@ class Spinner(Indicator):
 		1.0		-	Postprocessing
 		"""
 		NSymbols = len(self.symbols)
-		crashString = self.borders[0]+self.crashColor(self.crashSymbol)+self.borders[1]
-		finishString = self.borders[0]+self.finishColor(self.finishSymbol)+self.borders[1]
-		skippedString = self.borders[0]+self.skippedColor(self.finishSymbol)+self.borders[1]
+		crashString = self.borders[0]+self.color.bad(self.crashSymbol)+self.borders[1]
+		finishString = self.borders[0]+self.color.good(self.finishSymbol)+self.borders[1]
+		skippedString = self.borders[0]+self.color.good(self.finishSymbol)+self.borders[1]
 		
 		for name, prog in zip(self.names, map(self.threads.get, self.names)):
 			if prog is None:
 				yield crashString
 			elif prog == 2:
 				yield skippedString
-			elif name in self.finishedThreads:
+			elif self.threads[name] in self.FINISHED_CODES:
 				yield finishString
 			elif 0 <= prog < 1:
-				yield self.borders[0]+self.progColor(self.symbols[self.n])+self.borders[1]
+				yield self.borders[0]+self.color.progress(self.symbols[self.n])+self.borders[1]
 			elif prog < 0:
-				yield self.borders[0]+self.preColor("." if self.n%2 else ":")+self.borders[1]
+				yield self.borders[0]+self.color.pre("." if self.n%2 else ":")+self.borders[1]
 			elif prog == 1:
-				yield self.borders[0]+self.postColor("." if self.n%2 else ":")+self.borders[1]
+				yield self.borders[0]+self.color.post("." if self.n%2 else ":")+self.borders[1]
 			else:
 				yield crashString
 		self.n = (self.n+1) % NSymbols
@@ -475,17 +240,6 @@ class TextProgress(Indicator):
 	
 	symbols : tuple[str]=[".", ",", ":", "|", "I", "H", "#"]
 
-	@overload
-	def __init__(self, threads: HitchableDict, symbols: tuple[str]=[".", ",", ":", "|", "I", "H", "#"], length: int = 15,
-			  message: str = "", sep: str = " ", borders: tuple[str, str] = ("[", "]"), crashSymbol="X",
-			  finishSymbol=SQUARE, out=sys.stdout, preColor: str = None, partition: str = None,
-			  crashColor: str = None, skippedColor: str = None, finishColor: str = None,
-			  postColor: str = None, progColor: str = None): ...
-	def __init__(self, *args, **kwargs):
-		if len(args) < 2 and "symbols" not in kwargs:
-			args = (*args[:1], self.symbols, *args[1:])
-		super().__init__(*args, **kwargs)
-
 	@property
 	def rowGenerator(self) -> Generator[tuple[int,str],None,None]:
 		"""Progress special cases:
@@ -497,77 +251,62 @@ class TextProgress(Indicator):
 		1.0		-	Postprocessing
 		"""
 		NSymbols = len(self.symbols)
-		crashString = self.borders[0]+self.crashColor(self.crashSymbol)+self.borders[1]
-		finishString = self.borders[0]+self.finishColor(self.finishSymbol)+self.borders[1]
-		skippedString = self.borders[0]+self.skippedColor(self.finishSymbol)+self.borders[1]
+		crashString = self.borders[0]+self.color.bad(self.crashSymbol)+self.borders[1]
+		finishString = self.borders[0]+self.color.good(self.finishSymbol)+self.borders[1]
+		skippedString = self.borders[0]+self.color.good(self.finishSymbol)+self.borders[1]
 		
 		for name, prog in zip(self.names, map(self.threads.get, self.names)):
 			if prog is None:
 				yield crashString
 			elif prog == 2:
 				yield skippedString
-			elif name in self.finishedThreads:
+			elif self.threads[name] in self.FINISHED_CODES:
 				yield finishString
 			elif 0 <= prog < 1:
-				yield self.borders[0]+self.progColor(self.symbols[int(NSymbols*prog)])+self.borders[1]
+				yield self.borders[0]+self.color.progress(self.symbols[int(NSymbols*prog)])+self.borders[1]
 			elif prog < 0:
-				yield self.borders[0]+self.preColor("."*self.n + ":"*(self.n<self.innerLength) + "."*(self.innerLength-self.n))+self.borders[1]
+				yield self.borders[0]+self.color.pre("."*self.n + ":"*(self.n<self.innerLength) + "."*(self.innerLength-self.n))+self.borders[1]
 			elif prog == 1:
-				yield self.borders[0]+self.postColor("o"*self.n + "O"*(self.n<self.innerLength) + "o"*(self.innerLength-self.n))+self.borders[1]
+				yield self.borders[0]+self.color.post("o"*self.n + "O"*(self.n<self.innerLength) + "o"*(self.innerLength-self.n))+self.borders[1]
 			else:
 				yield crashString
 		self.n = (self.n+1) % (self.innerLength + 1)
 
 class TerminalUpdater(Logged):
 	
-	threads : HitchableDict
+	threads : HookedDict
 	thread : Thread
 	hooks : Hooks
-	out : TextIO
-	indicator : Indicator = None
+	out : TextIO = None
+	indicator : Indicator
 
 	@overload
-	def __init__(self, message, category, names : Iterable[Hashable], /, **kwargs): ...
+	def __init__(self, message, category, names : Iterable[Hashable], /): ...
 	@overload
-	def __init__(self, message, category, N : int, /, **kwargs): ...
+	def __init__(self, message, category, N : int, /): ...
 	@overload
-	def __init__(self, message, category, names : Iterable[Hashable], /, hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicator : Indicator=Timer, **indicatorArgs): ...
+	def __init__(self, message, category, names : Iterable[Hashable], /, *, hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicatorType : Indicator=Timer, **indicatorArgs): ...
 	@overload
-	def __init__(self, message, category, N : int, /, hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicator : Indicator=Timer, **indicatorArgs): ...
-	def __init__(self, message, category, names, /, hooks : Hooks=GlobalHooks, out=sys.stdout, indicator : Indicator=Timer, **kwargs):
-		
-		self.startTime = timer()
+	def __init__(self, message, category, N : int, /, *, hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicatorType : Indicator=Timer, **indicatorArgs): ...
+	def __init__(self, message, category, names, /, *, hooks : Hooks=GlobalHooks, out=None, indicatorType : Indicator=Timer, **indicatorArgs):
 		
 		self.message = message
 		self.category = category
 		self.hooks = hooks
-		if isinstance(names, int):
-			names = [f"#{{:0>{len(str(names))}}}".format(i) for i in range(names)]
-		self.threadNames = names
-		self.threads = HitchableDict(map(lambda name : (name,-1.0), names), onSet=self.updateIndicator)
-		self.out = out
+		self.out = out or sys.stdout
+		if isinstance(names, Iterable) and (names := list(names)) and all(isinstance(name, Hashable) for name in names):
+			pass
+		elif isinstance(names, int):
+			Nlength = len(str(names))
+			names = [f"#{str(i).zfill(Nlength)}" for i in range(names)]
+		else:
+			raise TypeError(f"The third positional argument must be either an `int` or an iterable of names (hashable elements), which it was not {names=}.")
+		self.threads = HookedDict(map(lambda name : (name,-1.0), names), hooks=self.hooks)
 		
-		self.running = True
+		self.hooks.addHook("HookedDict", self.updateIndicator)
+		self.hooks.addHook(self.category, self.progressCallback)
 
-		"""Progress special cases:
-		None	-	Service crashed
-		2		-	Never ran/skipped
-		3		-	Completed
-		0<->1	-	Running
-		<0		-	Not started
-		1.0		-	Postprocessing
-		"""
-		
-		# self.hooks.addHook(f"{self.category}Initialized", self.initializedCallback) # Not needed, is already initialized by default.
-		self.hooks.addHook(f"{self.category}Skipped", self.skippedCallback)
-		self.hooks.addHook(f"{self.category}Starting", self.startingCallback)
-		self.hooks.addHook(f"{self.category}Progress", self.progressCallback)
-		self.hooks.addHook(f"{self.category}PostProcess", self.postProcessCallback)
-		self.hooks.addHook(f"{self.category}Finished", self.finishedCallback)
-		self.hooks.addHook(f"{self.category}Failed", self.failedCallback)
-
-		if indicator is not None:
-			self.setIndicator(indicator, **kwargs)
+		self.indicator = indicatorType(self.message, self.category, threads=self.threads, hooks=self.hooks, out=self.out, **indicatorArgs)
 
 	def __enter__(self):
 		self.start()
@@ -576,72 +315,57 @@ class TerminalUpdater(Logged):
 	def __exit__(self, *args):
 		self.stop()
 
-	def initializedCallback(self, eventInfo : dict[str,Any]):
-		if eventInfo["name"] in self.threads:
-			self.threads[eventInfo["name"]] = -1.0
-
-	def skippedCallback(self, eventInfo : dict[str,Any]):
-		if eventInfo["name"] in self.threads:
-			self.indicator.finishedThreads.add(eventInfo["name"])
-			self.threads[eventInfo["name"]] = 2
-
-	def startingCallback(self, eventInfo : dict[str,Any]):
-		if eventInfo["name"] in self.threads:
-			self.threads[eventInfo["name"]] = 0.0
-
 	def progressCallback(self, eventInfo : dict[str,Any]):
-		if eventInfo["name"] in self.threads:
-			self.threads[eventInfo["name"]] = eventInfo["value"]
-
-	def postProcessCallback(self, eventInfo : dict[str,Any]):
-		if eventInfo["name"] in self.threads:
-			self.threads[eventInfo["name"]] = 1.0
-
-	def finishedCallback(self, eventInfo : dict[str,Any]):
-		if eventInfo["name"] in self.threads:
-			self.indicator.finishedThreads.add(eventInfo["name"])
-			self.threads[eventInfo["name"]] = 3
-
-	def failedCallback(self, eventInfo : dict[str,Any]):
-		if eventInfo["name"] in self.threads:
-			self.threads[eventInfo["name"]] = None
-			self.indicator.finishedThreads.add(eventInfo["name"])
+		
+		if eventInfo["name"] not in self.threads:
+			return
+		match eventInfo["type"]:
+			case "Skipped":
+				self.threads[eventInfo["name"]] = 2
+			case "Starting":
+				self.threads[eventInfo["name"]] = 0.0
+			case "Progress":
+				self.threads[eventInfo["name"]] = eventInfo["value"]
+			case "PostProcess":
+				self.threads[eventInfo["name"]] = 1.0
+			case "Finished":
+				self.threads[eventInfo["name"]] = 3
+			case "Failed":
+				self.threads[eventInfo["name"]] = None
 	
-	def setIndicator(self, indicatorClass : Indicator=Spinner, **kwargs):
-		self.indicator = indicatorClass(self.threads, **({"out":self.out, "message":self.message} | kwargs))
+	@property
+	def indicator(self) -> Indicator:
+		return self.__dict__["indicator"]
+	
+	@indicator.setter
+	def indicator(self, value : Indicator):
+		if "indicator" in self.__dict__:
+			self.__dict__["indicator"].stop()
+		self.__dict__["indicator"] = value
+	
+	@indicator.deleter
+	def indicator(self):
+		if "indicator" in self.__dict__:
+			self.__dict__["indicator"].stop()
+			self.__dict__.pop("indicator")
+		else:
+			raise AttributeError(f"Indicator has not been set yet, so it can not be deleted.")
 
 	def start(self, *args, **kwargs):
-		self.thread = Thread(target=self.mainLoop, args=args, kwargs=kwargs, daemon=True)
+		self.thread = Thread(target=self.indicator.run, args=args, kwargs=kwargs, daemon=True)
 		self.thread.start()
 	
-	def wait(self, timeout=3):
-		self.thread.join(timeout=timeout)
+	def wait(self, timeout=None):
+		self.indicator.wait(timeout=timeout)
 	
 	def kill(self):
-		"""Does not wait for thread to stop."""
-		self.indicator.running = False
-		try:
-			self.indicator.condition.notify_all()
-		except RuntimeError:
-			pass
+		"""Tells updater to stop running, but does not wait for thread to stop."""
+		self.indicator.kill()
 
 	def stop(self):
-		"""Waits for thread to stop."""
-		self.indicator.running = False
-		try:
-			self.indicator.condition.notify_all()
-		except RuntimeError:
-			pass
-		self.thread.join()
+		"""Tells updater to stop running and Waits for updater to stop before returning."""
+		self.indicator.stop()
 
-	def mainLoop(self, *args, **kwargs):
-		try:
-			self.indicator.run(*args, **kwargs)
-		except Exception as e:
-			self.LOG.exception(e)
-
-	def updateIndicator(self):
-		try:
-			self.indicator.threads = self.threads
-		except:
-			pass
+	def updateIndicator(self, eventInfo : dict[str,Any]):
+		if eventInfo.get("name") == id(self):
+			self.indicator.update()

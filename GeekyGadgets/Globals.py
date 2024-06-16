@@ -13,3 +13,6 @@ ROOT_LOGGER = logging.getLogger()
 DEV_NULL = open(os.devnull, "w")
 DEV_NULL_BYTES = open(os.devnull, "wb")
 ISATTY = sys.stdout.isatty()
+
+FORMAT_PATTERN = re.compile(r"(?P<filler>[^<^>]+)?(?P<direction>[<^>])?(?P<size>\d+)?(?P<rest>.*)")
+ANSI_MATCH = re.compile("\u001b.*?m|\x1b.*?m")

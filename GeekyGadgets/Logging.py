@@ -1,7 +1,7 @@
 
 from GeekyGadgets.Globals import *
 
-__all__ = ("Logged",)
+__all__ = ("Logged", "logging")
 
 class Logged:
 	

@@ -101,14 +101,14 @@ class Command:
 		return "".join(map(str, self.processes))
 	
 	def run(self):
-		self.hooks.trigger(f"{self.category}Started", {"name" : self.name})
+		self.hooks.trigger(self.category, {"name" : self.name, "type" : "Started"})
 		self.processes.run()
 		for p in self.processes:
 			p.wait()
 		if self.success:
-			self.hooks.trigger(f"{self.category}Finished", {"name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Finished"})
 		else:
-			self.hooks.trigger(f"{self.category}Failed", {"name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Failed"})
 
 	def start(self):
 		
@@ -213,14 +213,14 @@ class Process:
 		except:
 			pass
 		
-		self.hooks.trigger(f"{self.category}Started", {"name" : self.name})
+		self.hooks.trigger(self.category, {"name" : self.name, "type" : "Started"})
 	
 	def wait(self):
 		if self.popen.returncode is None:
 			if self.popen.wait() == 0:
-				self.hooks.trigger(f"{self.category}Finished", {"name" : self.name})
+				self.hooks.trigger(self.category, {"name" : self.name, "type" : "Finished"})
 			else:
-				self.hooks.trigger(f"{self.category}Failed", {"name" : self.name})
+				self.hooks.trigger(self.category, {"name" : self.name, "type" : "Failed"})
 	
 	@property
 	def RUNNING(self):
@@ -303,7 +303,14 @@ class ConditionalProcess(Process):
 class OnSuccessProcess(ConditionalProcess):
 
 	END_SYMBOL : str= "&&"
-	SUCCESS : bool = property(lambda self: ((self.popen.returncode is not None and (self.popen.returncode == 0) == (self.child.popen.returncode == 0))) and (self.child.child.SUCCESS if self.child.child else True))
+	@property
+	def SUCCESS(self) -> bool:
+		if not (self.popen.returncode is not None and (self.popen.returncode == 0) == (self.child.popen.returncode == 0)):
+			return False
+		elif self.child.child:
+			return self.child.child.SUCCESS
+		else:
+			return True
 
 	@property
 	def condition(self):
@@ -312,7 +319,14 @@ class OnSuccessProcess(ConditionalProcess):
 class OnFailureProcess(ConditionalProcess):
 
 	END_SYMBOL : str= "||"
-	SUCCESS : bool = property(lambda self: (self.popen.returncode == 0 or self.child.popen.returncode == 0) and (self.child.child.SUCCESS if self.child.child else True))
+	@property
+	def SUCCESS(self) -> bool:
+		if not (self.popen.returncode == 0 or self.child.popen.returncode == 0):
+			return False
+		elif self.child.child:
+			return self.child.child.SUCCESS
+		else:
+			return True
 
 	@property
 	def condition(self):

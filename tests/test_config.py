@@ -29,6 +29,7 @@ def test_toml():
 	
 	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
 	os.chdir(os.path.splitext(__file__)[0])
 	
 	config1 = loadTOML("tomlExample.toml")
@@ -75,6 +76,7 @@ def test_methods():
 
 	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
 	os.chdir(os.path.splitext(__file__)[0])
 	
 	config1 = loadTOML("tomlExample.toml")
@@ -114,6 +116,7 @@ def test_operators():
 
 	from GeekyGadgets.Configs import loadTOML, Config, ConfigCategory, FlagNotFound
 	import os
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
 	os.chdir(os.path.splitext(__file__)[0])
 	
 	config1 = loadTOML("tomlExample.toml")

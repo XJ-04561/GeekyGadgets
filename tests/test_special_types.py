@@ -3,6 +3,10 @@ from GeekyGadgets.SpecialTypes import LimitedDict
 
 def test_limited_dict():
 
+	from pprint import pprint
+
+	pprint(LimitedDict.__dict__)
+
 	d1 = LimitedDict(limit=100)
 	d2 = {}
 	for i in range(100):

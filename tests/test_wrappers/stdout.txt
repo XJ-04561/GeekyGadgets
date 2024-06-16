@@ -1,0 +1,4 @@
+Help on function in module test_wrappers:
+
+f(a: int, b: float = 12.0)
+

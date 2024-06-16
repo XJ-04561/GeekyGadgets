@@ -231,16 +231,16 @@ class DownloaderReportHook:
 		1.0		-	Postprocessing
 		"""
 		if prog == None:
-			self.hooks.trigger(self.category+"Failed", {"value" : prog, "name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Failed", "value" : prog})
 		elif prog == 2:
-			self.hooks.trigger(self.category+"Skipped", {"value" : prog, "name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Skipped", "value" : prog})
 		elif prog == 3:
-			self.hooks.trigger(self.category+"Finished", {"value" : prog, "name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Finished", "value" : prog})
 		elif 0 <= prog < 1:
-			self.hooks.trigger(self.category+"Progress", {"value" : prog, "name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Progress", "value" : prog})
 		elif prog <0:
-			self.hooks.trigger(self.category+"Starting", {"value" : prog, "name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Starting", "value" : prog})
 		elif prog == 1.0:
-			self.hooks.trigger(self.category+"PostProcess", {"value" : prog, "name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "PostProcess", "value" : prog})
 		else:
-			self.hooks.trigger(self.category+"Failed", {"value" : prog, "name" : self.name})
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Failed", "value" : prog})

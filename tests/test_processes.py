@@ -6,6 +6,8 @@ from subprocess import Popen
 EXE = sys.executable
 
 def test_process_single():
+	
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
 	os.chdir(os.path.splitext(__file__)[0])
 
 	COMMANDS = [
@@ -14,7 +16,7 @@ def test_process_single():
 	]
 	
 	for i, (commandString, returncodes, success) in enumerate(COMMANDS):
-		outDir = os.path.join(".", f"test_process_single_{i+1}")
+		outDir = os.path.join(".", f"single_{i+1}")
 		os.makedirs(outDir, exist_ok=True)
 
 		command = Command(commandString, dir=outDir)
@@ -31,6 +33,7 @@ def test_process_single():
 
 def test_process_logic():
 
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
 	os.chdir(os.path.splitext(__file__)[0])
 
 	COMMANDS = [
@@ -41,7 +44,7 @@ def test_process_logic():
 	]
 	
 	for i, (commandString, returncodes, success) in enumerate(COMMANDS):
-		outDir = os.path.join(".", f"test_process_logic_{i+1}")
+		outDir = os.path.join(".", f"logic_{i+1}")
 		os.makedirs(outDir, exist_ok=True)
 
 		command = Command(commandString, dir=outDir)
@@ -58,6 +61,7 @@ def test_process_logic():
 
 def test_process_pipe():
 
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
 	os.chdir(os.path.splitext(__file__)[0])
 
 	COMMANDS = [
@@ -67,7 +71,7 @@ def test_process_pipe():
 	]
 	
 	for i, (commandString, returncodes, success) in enumerate(COMMANDS):
-		outDir = os.path.join(".", f"test_process_pipe_{i+1}")
+		outDir = os.path.join(".", f"pipe_{i+1}")
 		os.makedirs(outDir, exist_ok=True)
 
 		command = Command(commandString, dir=outDir)
