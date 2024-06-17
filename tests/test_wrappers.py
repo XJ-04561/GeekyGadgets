@@ -1,5 +1,6 @@
 
 from GeekyGadgets.Wrappers import *
+from GeekyGadgets.IO import ReplaceSTDOUT
 
 def test_wrappers():
 	
@@ -19,24 +20,23 @@ def test_wrappers():
 	def f(a : int, b : float=12.):
 		return a * b
 
-	_oldstdout = sys.stdout
-	sys.stdout = open("stdout.txt", "w")
-	import time, threading
+	with ReplaceSTDOUT() as replacer:
+		help(_f)
+		normalText = replacer.read()
 	
-	help(_f)
-	sys.stdout.close()
-	expectedOut = open("stdout.txt", "r").read()
-	sys.stdout = open("stdout.txt", "w")
-	help(f)
+	assert normalText
 
-	assert expectedOut
+	with ReplaceSTDOUT() as replacer:
+		help(f)
+		wrappedText = replacer.read()
+
+	assert wrappedText
 
 	assert f(8) == _f(8)
 
-	sys.stdout.close()
-	sys.stdout = _oldstdout
-
-	assert open("stdout.txt", "r").read() == expectedOut
+	print (f"{normalText=}")
+	print (f"{wrappedText=}")
+	assert normalText == wrappedText
 
 if __name__ == "__main__":
 	test_wrappers()

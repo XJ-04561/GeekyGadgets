@@ -86,6 +86,10 @@ class Default(property):
 		super().__init__(fget, fset, fdel, doc)
 		if hasattr(self.fget, "__code__"):
 			self.fgetArgnames = self.fget.__code__.co_varnames[:self.fget.__code__.co_argcount+self.fget.__code__.co_kwonlyargcount]
+		elif hasattr(getattr(self.fget, "__func__", None), "__code__"):
+			self.fgetArgnames = self.fget.__func__.__code__.co_varnames[:self.fget.__code__.co_argcount+self.fget.__code__.co_kwonlyargcount]
+		else:
+			self.fgetArgnames = ()
 		if deps or not hasattr(self, "deps"):
 			self.deps = deps
 		

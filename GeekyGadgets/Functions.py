@@ -11,6 +11,18 @@ def first(iterator):
 		return item
 	return None
 
+_N = TypeVar("_N")
+_O = TypeVar("_O")
+
+@overload
+def swapAttr(obj : object, attrName : str, new : _N, /) -> _N|Any|None: ...
+@overload
+def swapAttr(obj : object, attrName : str, new : _N, default : _O, /) -> _N|_O: ...
+def swapAttr(obj : object, attrName : str, new : _N, default : _O=None, /) -> _N|_O:
+	old = getattr(obj, attrName, default)
+	setattr(obj, attrName, new)
+	return old
+
 def forceHash(obj):
 	if hasattr(obj, "__hash__"):
 		try:

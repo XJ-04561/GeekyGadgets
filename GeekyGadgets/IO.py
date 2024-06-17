@@ -1,8 +1,10 @@
 
+from types import TracebackType
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Classy import Default
 from GeekyGadgets.Threads import RLock
 from GeekyGadgets.SpecialTypes import LimitedList
+from GeekyGadgets.Functions import swapAttr
 
 from io import *
 
@@ -225,10 +227,6 @@ class LocalIO(list):
 	def writelines(self : "LocalIO[_T]", lines : Iterable[_T]):
 		self.extend(lines)
 
-def switchSTDOUT(new):
-	old, sys.stdout = sys.stdout, new
-	return old
-
 class ReplaceIO:
 	
 	outIO : IO[str|bytes]
@@ -238,11 +236,10 @@ class ReplaceIO:
 	@overload
 	def __init__(self, /): ...
 	@overload
-	def __init__(self, /, container : IO[str|bytes]=LocalIO(), replacerFunc : Callable=None): ...
-	def __init__(self, /, container : IO[str|bytes]=None, replacerFunc : Callable=None):
-		self.container : LocalIO[str|bytes] = container or LocalIO()
-		if self.replacerFunc is not None:
-			self.replacerFunc = replacerFunc
+	def __init__(self, /, container : IO[str|bytes], replacerFunc : Callable): ...
+	def __init__(self, /, container : IO[str|bytes], replacerFunc : Callable):
+		self.container = container
+		self.replacerFunc = replacerFunc
 	
 	def __iter__(self):
 		return iter(tuple(self.container))
@@ -252,7 +249,7 @@ class ReplaceIO:
 		self.start()
 		return self
 	
-	def __exit__(self):
+	def __exit__(self, type: type[BaseException] | None, value: BaseException | None, traceback: TracebackType | None) -> None:
 		"""Stop capturing."""
 		self.stop()
 
@@ -264,17 +261,19 @@ class ReplaceIO:
 		"""Stop capturing."""
 		self.replacerFunc(self.outIO)
 
-	def read(self) -> list[str]:
-		return self.container.read()
+	def read(self, n: int = -1) -> tuple[AnyStr]:
+		return self.container.read(n)
 
-	def read(self) -> list[str]:
-		return 
+	def readlines(self, hint: int = -1) -> List[AnyStr]:
+		return self.container.readlines(hint)
 
-class CaptureOutput(ReplaceIO):
+	def write(self, s : str|bytes):
+		return self.container.write(s)
 	
-	replacerFunc : Callable = switchSTDOUT
+	def writelines(self, lines : Iterable[_T]):
+		return self.container.writelines(lines)
 
-class SiphonOutput(CaptureOutput):
+class SiphonIO(ReplaceIO):
 	
 	splitIO : SplitTextIO
 
@@ -284,3 +283,39 @@ class SiphonOutput(CaptureOutput):
 		self.splitIO.add(self.container)
 		self.splitIO.add(old := self.replacerFunc(self.splitIO))
 		self.outIO = old
+
+class ReplaceSTD(ReplaceIO):
+
+	@overload
+	def __init__(self, /, container : IO[str|bytes]=LocalIO): ...
+	def __init__(self, /, container : IO[str|bytes]=None):
+		self.container = container or LocalIO()
+class SiphonSTD(ReplaceSTD, SiphonIO): pass
+
+@staticmethod
+def swapSTDOUT(new):
+	"""Swap the current value of `sys.stdout` with that of the `new` argument, and return the old value."""
+	return swapAttr(sys, "stdout", new)
+@staticmethod
+def swapSTDERR(new):
+	"""Swap the current value of `sys.stderr` with that of the `new` argument, and return the old value."""
+	return swapAttr(sys, "stderr", new)
+@staticmethod
+def swapSTDIN(new):
+	"""Swap the current value of `sys.stdin` with that of the `new` argument, and return the old value."""
+	return swapAttr(sys, "stdin", new)
+
+class ReplaceSTDOUT(ReplaceSTD):
+	replacerFunc = swapSTDOUT
+class SiphonSTDOUT(SiphonSTD):
+	replacerFunc = swapSTDOUT
+
+class ReplaceSTDERR(ReplaceSTD):
+	replacerFunc = swapSTDERR
+class SiphonSTDERR(SiphonSTD):
+	replacerFunc = swapSTDERR
+
+class ReplaceSTDIN(ReplaceSTD):
+	replacerFunc = swapSTDIN
+class SiphonSTDIN(SiphonSTD):
+	replacerFunc = swapSTDIN

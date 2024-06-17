@@ -1,6 +1,6 @@
 
 from GeekyGadgets.TerminalUpdater import *
-from GeekyGadgets.IO import CaptureOutput
+from GeekyGadgets.IO import ReplaceSTDOUT
 
 def test_creation():
 
@@ -9,40 +9,40 @@ def test_creation():
 	os.chdir(os.path.splitext(__file__)[0])
 
 
-	with CaptureOutput() as CU:
+	with ReplaceSTDOUT() as replacer:
 		default = TerminalUpdater("Testing Spinner", "TestSpinner", 4)
 		with default:
 			import time
 			assert default.running
 			time.sleep(2)
-		defaultOutput = CU.read()
+		defaultOutput = replacer.read()
 		assert not default.running
 
-	with CaptureOutput():
+	with ReplaceSTDOUT() as replacer:
 		spinner = TerminalUpdater("Testing Spinner", "TestSpinner", 4, indicator=Spinner)
 		with spinner:
 			import time
 			assert spinner.running
 			time.sleep(2)
-		spinnerOutput = CU.read()
+		spinnerOutput = replacer.read()
 		assert not spinner.running
 
-	with CaptureOutput():
+	with ReplaceSTDOUT() as replacer:
 		textProgress = TerminalUpdater("Testing TextProgress", "TestTextProgress", 4, indicator=TextProgress)
 		with textProgress:
 			import time
 			assert textProgress.running
 			time.sleep(2)
-		textProgressOutput = CU.read()
+		textProgressOutput = replacer.read()
 		assert not textProgress.running
 
-	with CaptureOutput():
+	with ReplaceSTDOUT() as replacer:
 		loadingBar = TerminalUpdater("Testing LoadingBar", "TestLoadingBar", 4, indicator=LoadingBar)
 		with loadingBar:
 			import time
 			assert loadingBar.running
 			time.sleep(2)
-		loadingBarOutput = CU.read()
+		loadingBarOutput = replacer.read()
 		assert not loadingBar.running
 
 	assert defaultOutput

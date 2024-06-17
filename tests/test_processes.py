@@ -86,6 +86,6 @@ def test_process_pipe():
 		assert command.exitcodes == returncodes
 		assert command.success == success
 
-	assert open(os.path.join(".", "test_process_pipe_1", "simplepipe.txt"), "r").read() == "Start\n0\n1\n4\n9\n16\n25\n"
-	assert open(os.path.join(".", "test_process_pipe_2", "doublepipe.txt"), "r").read() == "Start\n0\n1\n8\n27\n64\n125\n"
-	assert open(os.path.join(".", "test_process_pipe_3", "longpipe.txt"), "r").read() == "Start\n0\n1\n64\n729\n4096\n15625\n"
+	assert open(os.path.join(".", "pipe_1", "simplepipe.txt"), "r").read() == "Start\n0\n1\n4\n9\n16\n25\n"
+	assert open(os.path.join(".", "pipe_2", "doublepipe.txt"), "r").read() == "Start\n0\n1\n8\n27\n64\n125\n"
+	assert open(os.path.join(".", "pipe_3", "longpipe.txt"), "r").read() == "Start\n0\n1\n64\n729\n4096\n15625\n"

@@ -1,30 +1,59 @@
 
+from collections.abc import Iterable
+from typing import SupportsIndex
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Threads import RLock
 from GeekyGadgets.Classy import Default
-
-_NOT_SET = object()
+from GeekyGadgets.Iterators import Chain
 
 __all__ = ("LimitedDict",)
 
+_NOT_SET = object()
 _DEFAULT_LIMIT = 10000
+_T = TypeVar("_T")
 
-def shift(self : "LimitedIterable"):
-	with self._lock:
-		if hasattr(self, "remove"):
-			self.remove[next(iter(self.keys()))]
-		elif hasattr(self, "pop"):
-			self.pop[next(iter(self.keys()))]
-		else:
-			raise TypeError(f"Can't remove first element of {self} as it does not implement `remove` or `pop`")
+def useLock(func : Callable):
+	def _func_wrapper(self, *args, **kwargs):
+		with self._lock:
+			return func(self, *args, **kwargs)
+	update_wrapper(_func_wrapper, func)
+	_func_wrapper.usesLock = True
+	return _func_wrapper
 
-class LimitedIterable:
-	"""Subclasses will act as wrappers for their data model parent, so whichever function in the subclass that 
-	exists in the data model parent will get proper wrappings from them using `functools.update_wrapper`."""
+def preShave(func : Callable):
+	def _func_wrapper(self, *args, **kwargs):
+		# print(_func_wrapper, func, id(_func_wrapper), id(func), self, args, kwargs)
+		self.shave()
+		return func(self, *args, **kwargs)
+	update_wrapper(_func_wrapper, func)
+	_func_wrapper.shaves = True
+	return _func_wrapper
+
+def postShave(func : Callable):
+	def _func_wrapper(self, *args, **kwargs):
+		# print(_func_wrapper, func, id(_func_wrapper), id(func), self, args, kwargs)
+		ret = func(self, *args, **kwargs)
+		self.shave()
+		return ret
+	update_wrapper(_func_wrapper, func)
+	_func_wrapper.shaves = True
+	return _func_wrapper
+
+class LimitedIterable(Subscriptable):
+	"""An iterable type that imposes a size-limit on its instances, or instances of its subclasses. It and 
+	its subclasses uses the method `shave` to correct the iterable. `shave` in turn uses the method `shift` to remove 
+	an item, the property `size` to check the size of the iterable instance, and the attribute `LIMIT` 
+	as a size-limit (inclusive).
+	
+	`shave` can't be overrided, but `shift` and `size` can. This is because `size` determines how the size 
+	is defined (default is what is returned by `len`), and `shift` chooses which item(s) to remove. All `shave` does 
+	is keep calling `shift` until `size` is lower or equal to `LIMIT`.
+
+	It would be wise when subclassing to define your own `shift` method, to ensure proper behavior."""
 	
 	LIMIT : int
 	
-	_lock : RLock
+	_lock : RLock = cached_property(lambda self: RLock())
 
 	size : int = property(len)
 	
@@ -36,43 +65,30 @@ class LimitedIterable:
 	def __init__(self, iterable : Iterable, /): ...
 	@overload
 	def __init__(self, iterable : Iterable, /, *, limit : int=10000): ...
+	@postShave
 	def __init__(self, *args, limit : int=10000, **kwargs):
 		self.LIMIT = limit
-		self._lock = RLock()
 		super().__init__(*args, **kwargs)
 	
 	def __init_subclass__(cls) -> None:
-		"""Subclasses will act as wrappers for their data model parent, so whichever function in the subclass that 
-		exists in the data model parent will get proper wrappings from them using `functools.update_wrapper`."""
-		for base in cls.__bases__:
-			if not base is LimitedIterable and getattr(base, "__doc__", ""):
-				cls.__doc__ = base.__doc__
-				break
-		for name, func in vars(cls).items():
-			for base in cls.__bases__:
-				if base is LimitedIterable or not hasattr(base, name):
-					continue
-				elif isinstance(func, FunctionType):
-					update_wrapper(func, getattr(base, name))
-				# elif hasattr(func, "__doc__") and hasattr(getattr(base, name), "__doc__"):
-				# 	func.__doc__ = getattr(base, name).__doc__
-				break
-		
-		for base in cls.__bases__:
-			if base is LimitedIterable:
-				continue
-			for name in getattr(base, "__dict__", getattr(base, "__slots__", ())):
-				if name in getattr(cls, "__dict__", getattr(cls, "__slots__", ())):
-					continue
-				elif isinstance(func := getattr(base, name), FunctionType):
-					def _func_wrapper(self, *args, **kwargs) -> None:
-						ret = func(self, *args, **kwargs)
-						self.shave()
-						return ret
-					update_wrapper(_func_wrapper, func)
-					setattr(cls, name, _func_wrapper)
-		if not hasattr(cls, "shift"):
-			cls.shift = shift
+		super().__init_subclass__()
+		if getattr(cls.shift, "usesLock", False) is not True:
+			cls.shift = useLock(cls.shift)
+
+	def __repr__(self) -> str:
+		return f"<'{self.__class__.__qualname__}' object at {id(self):#x} filled to {self.size}/{self.LIMIT}>"
+
+	def shift(self : "LimitedIterable"):
+		with self._lock:
+			if hasattr(self, "remove"):
+				self.remove(next(iter(self)))
+			elif hasattr(self, "pop"):
+				if isinstance(self, dict):
+					self.pop(next(iter(self.keys())))
+				else:
+					self.pop(0)
+			else:
+				raise TypeError(f"Can't remove first element of {self} as it does not implement `remove` or `pop`")
 
 	@final
 	def shave(self) -> int:
@@ -86,63 +102,69 @@ class LimitedIterable:
 				self.shift()
 			return self.size - start
 
-class LimitedList(LimitedIterable, list): pass
-class LimitedDict(LimitedIterable, dict): pass
+class LimitedList(LimitedIterable, list):
 
-	# @overload
-	# def __init__(self, /): ...
-	# @overload
-	# def __init__(self, *, limit : int): ...
-	# @overload
-	# def __init__(self, iterable : Iterable|dict, /): ...
-	# @overload
-	# def __init__(self, iterable : Iterable|dict, /, *, limit : int): ...
-	# def __init__(self, iterable=None, /, *, limit=None):
-	# 	if super().__init__(iterable, limit=limit)
+	def shift(self : "LimitedList[_T]") -> _T:
+		return self.pop(0)
+
+	@postShave
+	def append(self, object: Any) -> None:
+		return super().append(object)
 	
-	# def __setitem__(self, key, value):
-	# 	with self._lock:
-	# 		if key not in self:
-	# 			while self.N >= self.LIMIT:
-	# 				self.pop(next(iter(self)))
-	# 			self.N += 1
-	# 		super().__setitem__(key, value)
-
-	# def setdefault(self, key, value):
-	# 	with self._lock:
-	# 		if key not in self:
-	# 			while self.N >= self.LIMIT:
-	# 				self.pop(next(iter(self)))
-	# 			self.N += 1
-	# 			super().setdefault(key, value)
+	@postShave
+	def extend(self, iterable: Iterable) -> None:
+		return super().extend(iterable)
 	
-	# def __delitem__(self, key):
-	# 	with self._lock:
-	# 		if key in self:
-	# 			self.N -= 1
-	# 		super().__delitem__(key)
+	@postShave
+	def insert(self, index: SupportsIndex, object: Any) -> None:
+		return super().insert(index, object)
 
-	# def update(self, other : dict|Iterable[tuple[Any,Any]]):
-	# 	if isinstance(other, dict):
-	# 		other = other.items()
-	# 	for key, value in other:
-	# 		self[key] = value
+class LimitedDict(LimitedIterable, dict):
+
+	def shift(self : "LimitedDict[_T]") -> _T:
+		with self._lock:
+			return self.pop(next(iter(self.keys())))
+
+	@postShave
+	def setdefault(self: "LimitedDict", key: Any, default: Any=None, /) -> Any:
+		return super().setdefault(key, default)
 	
-	# def clear(self):
-	# 	for key in tuple(self.keys()):
-	# 		self.pop(key)
+	@overload
+	def update(self: dict, m: SupportsKeysAndGetItem, /, **kwargs: Any) -> None: ...
+	@overload
+	def update(self: dict, m: Iterable[tuple], /, **kwargs: Any) -> None: ...
+	@overload
+	def update(self: dict, **kwargs: Any) -> None: ...
+	@postShave
+	def update(self, m, /, **kwargs):
+		return super().update(m, **kwargs)
 
-	# def pop(self, key, default=_NOT_SET):
-	# 	with self._lock:
-	# 		if key in self:
-	# 			self.N -= 1
-			
-	# 		if default is _NOT_SET:
-	# 			return super().pop(key)
-	# 		else:
-	# 			return super().pop(key, default)
-			
-	# def popitem(self) -> tuple:
-	# 	with self._lock:
-	# 		self.N -= 1
-	# 		return super().popitem()
+	@postShave
+	def __setitem__(self, key: Any, value: Any) -> None:
+		return super().__setitem__(key, value)
+
+class LimitedSet(LimitedIterable, set):
+
+	def shift(self : "LimitedSet[_T]") -> _T:
+		self.remove(out := next(iter(self)))
+		return out
+
+	@postShave
+	def add(self, element: Any) -> None:
+		return super().add(element)
+	
+	@postShave	
+	def update(self, *s: Iterable) -> None:
+		return super().update(*s)
+	
+	@postShave	
+	def difference_update(self, *s: Iterable[Any]) -> None:
+		return super().difference_update(*s)
+
+	@postShave
+	def intersection_update(self, *s: Iterable[Any]) -> None:
+		return super().intersection_update(*s)
+
+	@postShave
+	def symmetric_difference_update(self, s: Iterable) -> None:
+		return super().symmetric_difference_update(s)

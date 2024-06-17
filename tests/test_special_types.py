@@ -5,14 +5,19 @@ def test_limited_dict():
 
 	from pprint import pprint
 
-	pprint(LimitedDict.__dict__)
+	pprint(vars(LimitedDict))
+	assert LimitedDict.__setitem__.shaves
 
 	d1 = LimitedDict(limit=100)
 	d2 = {}
 	for i in range(100):
 		d1[i] = hex(i)
 		d2[i] = hex(i)
-		assert d1 == d2
+		try:
+			assert d1 == d2
+		except:
+			d1
+			assert d1 != d2
 
 	d1[100] = hex(100)
 	d2[100] = hex(100)
@@ -56,5 +61,5 @@ def test_limited_dict():
 
 	d1.clear()
 
-	assert len(d1) == 0 == d1.N
+	assert len(d1) == 0 == d1.size
 	

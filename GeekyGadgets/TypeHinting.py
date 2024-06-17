@@ -23,9 +23,17 @@ Number.register(complex)
 class Subscriptable(ABC):
 	def __class_getitem__(cls : _T, args : _TA) -> GenericAlias:
 		return GenericAlias(cls, args)
+
+class SupportsKeysAndGetItem(ABC):
+
 	@abstractmethod
-	def __getitem__(self, key):
+	def keys(self):
 		raise NotImplementedError()
+	
+	@abstractmethod
+	def __getitem__(self):
+		raise NotImplementedError()
+	
 Subscriptable.register(list)
 Subscriptable.register(tuple)
 Subscriptable.register(dict)

@@ -7,7 +7,7 @@ def test_future():
 	import random
 	
 	def waitAndHash(letter):
-		time.sleep(random.random())
+		time.sleep(random.random()/2)
 		return hash(letter)
 	letters = "ABCDEFGHIJKLMNOPQRSTUVXYZ"
 
@@ -63,7 +63,7 @@ def test_thread_group():
 	import time
 	import random
 	def waitAndHash(letter):
-		time.sleep(random.random())
+		time.sleep(random.random()/2)
 		return hash(letter)
 	letters = "ABCDEFGHIJKLMNOPQRSTUVXYZ"
 
@@ -97,7 +97,7 @@ def test_thread():
 	def generateNumber(theDict):
 		theDict[current_thread().name] = 1 + random.random()
 	def waitForSeconds(theDict):
-		time.sleep(theDict[current_thread().name])
+		time.sleep(theDict[current_thread().name]/2)
 	def writeResults(theDict):
 		theDict[current_thread().name] = 0
 	
