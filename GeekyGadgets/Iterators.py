@@ -18,10 +18,57 @@ if PYTHON_VERSION < (3, 12):
 				yield ret
 else:
 	from itertools import batched as Batched
-from itertools import chain as Chain, takewhile as TakeWhile, dropwhile as DropWhile, zip_longest as ZipLongest, repeat as Repeat
 
-__all__ = ("Batched", "Chain", "Repeat", "TakeWhile", "DropWhile", "ZipLongest", "DropThenTakeWhile", "ChainChain", "Grouper",
-		   "Walker", "LeavesWalker", "BranchesWalker", "ConfigWalker", "AlphaRange")
+from itertools import (
+	chain as Chain, takewhile as TakeWhile, dropwhile as DropWhile, zip_longest as ZipLongest,
+	repeat as Repeat)
+
+__all__ = ("Alternate", "AlphaRange", "Batched", "BranchesWalker", "Chain", "ChainChain", "ConfigWalker",
+		   "DropThenTakeWhile", "DropWhile", "Grouper", "LeavesWalker", "Repeat", "TakeWhile", "Walker", "ZipLongest")
+
+_E = TypeVar("_E")
+_E1 = TypeVar("_E1")
+_E2 = TypeVar("_E2")
+_E3 = TypeVar("_E3")
+_E4 = TypeVar("_E4")
+_E5 = TypeVar("_E5")
+_E6 = TypeVar("_E6")
+
+class Row(tuple):
+	def __iter__(self):
+		self._iterator = super().__iter__()
+		return self
+	def __next__(self):
+		return next(self._iterator)
+
+class Zip(zip, Subscriptable):
+	rowFactory : type = tuple
+	def __next__(self) -> Any:
+		return self.rowFactory(super().__next__())
+
+class Alternate(Subscriptable):
+	"""Iterate through multiple iterables but iterate only through one position at a time from each iterable. Stops 
+	when the first iterable reaches its end. If `strict` is set to `True`, then a `ValueError` is raised.
+	
+	`Alternate("ABCDEFG", range(7)) -> "A", 0, "B", 1, "C", 2, "D", 3, ...`
+	"""
+
+	row : Row
+	iterator : Zip[Row]
+
+	def __init__(self, *iterables : Iterable, strict : bool=False):
+		self.iterator = Zip(*iterables, strict=strict)
+		self.iterator.rowFactory = Row
+	
+	def __iter__(self):
+		return self
+	
+	def __next__(self):
+		for row in self.iterator:
+			self.row = Row(row)
+			for item in self.row:
+				return item
+		raise StopIteration()
 
 class AlphaRange:
 

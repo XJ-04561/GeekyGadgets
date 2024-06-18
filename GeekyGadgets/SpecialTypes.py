@@ -1,6 +1,6 @@
 
 from collections.abc import Iterable
-from typing import SupportsIndex
+from typing import Any, SupportsIndex
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Threads import RLock
 from GeekyGadgets.Classy import Default
@@ -38,6 +38,157 @@ def postShave(func : Callable):
 	update_wrapper(_func_wrapper, func)
 	_func_wrapper.shaves = True
 	return _func_wrapper
+
+class Freezer:
+
+	_freezers : dict
+
+	def __init__(self):
+		self._freezers = {}
+
+	def __get__(self, instance, owner=None):
+		from GeekyGadgets.Threads import current_thread
+		return self._freezers.get(current_thread())
+	
+	def __set__(self, instance, value):
+		from GeekyGadgets.Threads import current_thread
+		self._freezers[current_thread()] = value
+	
+	def __delete__(self, instance, owner=None):
+		from GeekyGadgets.Threads import current_thread
+		del self._freezers[current_thread()]
+
+class Spaces(ABC):
+
+	@abstractmethod
+	def __getattribute__(self, name: str) -> Any:
+		return super().__getattribute__(name)
+	@abstractmethod
+	def __setattr__(self, name: str, value: Any) -> None:
+		return super().__setattr__(name, value)
+	@abstractmethod
+	def __getitem__(self, key: str):
+		return super().__getitem__(key)
+	@abstractmethod
+	def __setitem__(self, key: str, value: Any):
+		return super().__setitem__(key, value)
+
+class LinkSpace(Spaces):
+
+	@overload
+	def __init__(self, source : str=None, /): ...
+	@overload
+	def __init__(self, source : object, name : str=None, /): ...
+	def __init__(self, source : object, name : str=None, /):
+		SETATTR(self, "__source__", source)
+		SETATTR(self, "__name__", name if name is not None else hex(id(self)))
+	
+	def __getitem__(self, key):
+		return getattr(self, key)
+	
+	def __setitem__(self, key, value) -> None:
+		return setattr(self, key, value)
+	
+	def __contains__(self, name):
+		return hasattr(GETATTR(self, "__source__"), name)
+
+	def __getattribute__(self, name: str) -> Any:
+		return getattr(GETATTR(self, "__source__"), name)
+	
+	def __setattribute__(self, name: str, value : Any) -> None:
+		return setattr(GETATTR(self, "__source__"), name, value)
+	
+	def __repr__(self):
+		return f"NameSpace {GETATTR(self, '__name__')!r}"
+
+class NameSpace(dict, Spaces):
+
+	@overload
+	def __init__(self, /, **kwargs): ...
+	@overload
+	def __init__(self, iterable : Iterable[tuple[str,Any]]|dict, /, **kwargs): ...
+	@overload
+	def __init__(self, name : str, /, **kwargs): ...
+	@overload
+	def __init__(self, iterable : Iterable[tuple[str,Any]]|dict, name : str=None, /, **kwargs): ...
+	def __init__(self, first=None, second=None, /, **kwargs):
+		if first is None:
+			SETATTR(self, "__name__", hex(id(self)))
+			super().__init__(**kwargs)
+		elif isinstance(first, str):
+			SETATTR(self, "__name__", first)
+			super().__init__(**kwargs)
+		elif isinstance(first, Iterable):
+			super().__init__(first, **kwargs)
+			SETATTR(self, "__name__", second if second is not None else hex(id(self)))
+		else:
+			TypeError(f"The first positional argument must be either a dict, an iterable, or a str. Not {type(first)}.")
+	
+	def __getitem__(self, key):
+		ret = dict.get(self, key, NULL)
+		if ret is NULL:
+			raise NameError(f"{self!r} has no entry named {key!r}")
+		return ret
+	
+	def __setitem__(self, key, value) -> None:
+		dict.__setitem__(self, key, value)
+	
+	def __getattribute__(self, name: str) -> Any:
+		return self[name]
+	
+	def __setattribute__(self, name: str, value : Any) -> None:
+		self[name] = value
+	
+	def __repr__(self):
+		return f"NameSpace {GETATTR(self, '__name__')!r}"
+
+class HybridSpace(NameSpace, LinkSpace):
+	
+	__link_spaces__ : list[LinkSpace]
+
+	@overload
+	def __init__(self, source : object, iterable : Iterable, /, **kwargs): ...
+	@overload
+	def __init__(self, source : object, iterable : Iterable, name : str, /, **kwargs): ...
+	def __init__(self, source : object, iterable=None, name=None, /, **kwargs):
+		SETATTR(self, "__link_spaces__", [LinkSpace(self, source, name)])
+		NameSpace.__init__(self, iterable, name, **kwargs)
+
+	def __getitem__(self, key):
+		ret = dict.get(self, key, NULL)
+		if ret is NULL:
+			for ls in reversed(GETATTR(self, "__link_spaces__")):
+				if key in ls:
+					return ls[key]
+		return ret
+	
+	def __getattribute__(self, name: str) -> Any:
+		ret = dict.get(self, name, NULL)
+		if ret is NULL:
+			for ls in reversed(GETATTR(self, "__link_spaces__")):
+				if name in ls:
+					return ls[name]
+		return ret
+	
+	def __or__(self, iterable : Iterable) -> "HybridSpace":
+		if isinstance(iterable, NameSpace):
+			for name, value in dict.items(iterable):
+				self[name] = value
+		elif isinstance(iterable, LinkSpace):
+			GETATTR(self, "__link_spaces__").append(iterable)
+		elif isinstance(iterable, dict):
+			for name, value in iterable.items():
+				self[name] = value
+		elif isinstance(iterable, Iterable):
+			for name, value in iterable:
+				self[name] = value
+		else:
+			return NotImplemented
+		return self
+	
+	def __ior__(self, iterable : Iterable) -> "HybridSpace":
+		return self | iterable
+
 
 class LimitedIterable(Subscriptable):
 	"""An iterable type that imposes a size-limit on its instances, or instances of its subclasses. It and 

@@ -5,9 +5,20 @@ from types import (GenericAlias, FunctionType, MethodType, MethodWrapperType, Me
 				   MemberDescriptorType)
 from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Callable, Iterable, Mapping
+try:
+	from builtins import function
+except:
+	class function: pass
+	def f(): ...
+	function = type(f)
+
 
 _T = TypeVar("_T")
 _TA = TypeVar("_TA")
+
+class method:
+	def __call__(self): ...
+method = type(method().__call__)
 
 class Number(ABC):
 	real : "Number"

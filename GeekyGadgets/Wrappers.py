@@ -1,53 +1,60 @@
 
+from typing import Any
 from GeekyGadgets.Globals import *
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta
 
-class NewFunctionType(ABC):
+class FunctionMeta(ABCMeta):
+
+	def __new__(mcls: type[Self], name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwargs: Any) -> Self:
+		"""Makes sure that the new classes have the same name as the function/method that is set through 
+		the `__base__` attribute."""
+		if "__base__" in namespace:
+			if not hasattr(namespace["__base__"], "__name__"):
+				raise TypeError(f"Can't create {name!r} type as its `__base__` attribute does not have a `__name__` attribute.")
+			return super().__new__(mcls, namespace["__base__"].__name__, bases, namespace, **kwargs)
+		elif any(hasattr(base, "__base__") for base in bases):
+			for base in bases:
+				if hasattr(base, "__base__"):
+					if not hasattr(base.__base__, "__name__"):
+						raise TypeError(f"Can't create {name!r} type as the inherited `__base__` attribute inherited from `{base}` does not have a `__name__` attribute.")
+					return super().__new__(mcls, base.__base__.__name__, bases, namespace, **kwargs)
+		else:
+			raise ValueError(f"Can't create {name!r} type as it does not have a `__base__` attribute set to a type object.")
+
+class Function(ABC, metaclass=FunctionMeta):
 	
-	def __call__(self, *args, **kwargs):
-		return self.func(*args, **kwargs)
-NewFunctionType.register(FunctionType)
+	__method_class__ : type["Method"]
+	__base__ = function
+	__func__ : function
 
-class NewMethodType(NewFunctionType):
-	__self__ : Any
-NewMethodType.register(MethodType)
-
-class WrapsFunc(NewFunctionType):
-	
-	_orig_func_container : tuple[FunctionType]
-
-	func : tuple[FunctionType]
-	MethodClass : type[NewMethodType]
-
-	def __init__(self, func):
-		self.func = staticmethod(func)
-		self._orig_func_container = (func, )
-		print(repr(func.__name__))
-		print(repr(func.__qualname__))
+	@overload
+	def __init__(self : "Function", func : function): ...
+	@overload
+	def __init__(self : "Method", func : method): ...
+	def __init__(self : "Function|Method", func : function|method):
+		self.__func__ = func
 		update_wrapper(self, func)
-		self.__name__ = func.__name__ or func.__qualname__
-		self.__qualname__ = func.__name__ or func.__qualname__
+
+	def __call__(self, *args, **kwargs):
+		return self.__func__(*args, **kwargs)
 	
-	def __init_subclass__(cls) -> None:
-		cls.MethodClass = type(cls.__name__+"Method", (WrapsMethod,), {})
-		cls.__name__ = "function"
-		return super().__init_subclass__()
+	def __init_subclass__(cls, *args, **kwargs) -> None:
+		if cls.__method_class__ is not None and "__method_class__" not in cls.__dict__:
+			cls.__method_class__ = FunctionMeta(cls.__qualname__.split(".")[-1]+"Method", (cls,), {"__base__" : method, "__method_class__" : None})
+		return super().__init_subclass__(*args, **kwargs)
+	
+	def __subclasshook__(cls : type, other : type) -> bool:
+		return issubclass(other, cls.__base__)
 	
 	def __get__(self, instance, owner=None):
-		return self.MethodClass(self._orig_func_container[0].__get__(instance, owner))
+		try:
+			return self.__method_class__(self.__func__.__get__(instance, owner))
+		except:
+			return self.__method_class__(self.__func__.__get__(instance))
 
-class WrapsMethod(NewMethodType):
-	
-	_orig_func_container : tuple[MethodType]
-	
-	func : tuple[MethodType]
+class Method(Function):
 
-	def __init_subclass__(cls) -> None:
-		cls.__name__ = "method"
-		return super().__init_subclass__()
-
-	def __init__(self, func : MethodType):
-		self.func = func
-		update_wrapper(self, func.__func__)
-		self.__name__ = func.__func__.__name__ or func.__func__.__qualname__
-		self.__qualname__ = func.__func__.__name__ or func.__func__.__qualname__
+	__method_class__ = None
+	__base__ = method
+	__func__ : method
+Function.__method_class__ = Method

@@ -3,6 +3,8 @@ from GeekyGadgets.Globals import *
 
 __all__ = ("Default", "ClassProperty", "CachedClassProperty", "threaded")
 
+_NOT_SET = object()
+
 class Default(property):
 	"""Works similarly to `functools.cached_property`, and has a setter and deleter by default like that of 
 	`functools.cached_property`. But, it allows to have the default value refreshed when some specific dependencies 
@@ -114,16 +116,16 @@ class Default(property):
 		from GeekyGadgets.Functions import forceHash, getAttrChain
 		if instance is None:
 			return self
-		if self.name in getattr(instance, "__dict__", ()):
+		elif self.name in getattr(instance, "__dict__", ()):
 			return instance.__dict__[self.name]
-		else:
-			values = tuple(getAttrChain(instance, dep) for dep in self.deps)
-			currentHash = forceHash(values)
+		
+		values = tuple(getAttrChain(instance, dep) for dep in self.deps)
+		currentHash = forceHash(values)
 		
 		if hasattr(instance, "__dict__") and instance.__dict__.get(f"_default_{self.name}", (currentHash+1,))[0] == currentHash:
 			return instance.__dict__[f"_default_{self.name}"][1]
 		else:
-			ret = self.fget(instance, **{name:value for name, value in zip(self.deps,values) if name.replace(".", "_") in self.fgetArgnames})
+			ret = self.fget(instance)
 			instance.__dict__[f"_default_{self.name}"] = (currentHash, ret)
 			return ret
 	
@@ -141,18 +143,6 @@ class Default(property):
 					del instance.__dict__[self.name]
 				if f"_default_{self.name}" in getattr(instance, "__dict__", ()):
 					del instance.__dict__[f"_default_{self.name}"]
-	
-	# def getter(self, fget):
-	# 	self.fget = fget
-	# 	return self
-	
-	# def setter(self, fset):
-	# 	self.fset = fset
-	# 	return self
-	
-	# def deleter(self, fdel):
-	# 	self.fdel = fdel
-	# 	return self
 
 class ClassProperty:
 	"""Similar to `builtins.property` but will generate the callback-returned value when accessed through the class 

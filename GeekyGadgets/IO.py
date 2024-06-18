@@ -30,35 +30,41 @@ class RePrinter:
 			return 80
 
 	@overload
-	def __init__(self, out=sys.stdout): ...
-	def __init__(self, out=None):
+	def __init__(self, out=sys.stdout, exitMessage : str=None): ...
+	def __init__(self, out=None, exitMessage=None):
 		self.out = out or sys.stdout
 		self.last = 0
+		self.exitMessage = exitMessage
 	
 	def __call__(self, msg):
 		with self.LOCK:
+			self.out.write(msg)
+			self.out.flush()
+			self.last += len(getattr(msg, "raw", msg))
+	
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type, exc_value, traceback):
+		if self.exitMessage:
+			self.out.write(self.exitMessage)
+		self.out.write("\n")
+	
+	def reset(self):
+		with self.LOCK:
 			if self.supportsColor:
-				if self.last:
-					print("\r"+"\033[A"*((self.last-1) // self.terminalWidth), end=msg, flush=True, file=self.out)
-				else:
-					print("\r", end=msg, flush=True, file=self.out)
-				self.last = len(getattr(msg, "raw", msg))
+				self.out.write("\r"+"\033[A"*(max(self.last-1, 0) // self.terminalWidth))
 			else:
-				print("\b"*self.last, end=msg, flush=True, file=self.out)
-				self.last = len(msg)
+				self.out.write("\b"*self.last)
+			self.out.flush()
+			self.last = 0
 	
 	def clear(self):
 		with self.LOCK:
-			if self.supportsColor:
-				if self.last:
-					back = "\r"+"\033[A"*((self.last-1) // self.terminalWidth)
-				else:
-					back = "\r"
-				print(back+" "*self.last, end=back, flush=True, file=self.out)
-				self.last = 0
-			else:
-				print("\b"*self.last+" "*self.last, end="\b"*self.last, flush=True, file=self.out)
-				self.last = 0
+			last = self.last
+			self.reset()
+			self(" " * last)
+			self.reset()
 
 class SplitIO(IOBase):
 	
@@ -204,6 +210,9 @@ class LocalBufferIO(LimitedList):
 	def writelines(self : "LocalBufferIO[_T]", lines : Iterable[_T]):
 		self.extend(lines)
 
+	def flush(self):
+		pass
+
 class LocalIO(list):
 	
 	size : int = property(lambda self: sum(map(len, self)))
@@ -226,6 +235,9 @@ class LocalIO(list):
 	
 	def writelines(self : "LocalIO[_T]", lines : Iterable[_T]):
 		self.extend(lines)
+	
+	def flush(self):
+		pass
 
 class ReplaceIO:
 	

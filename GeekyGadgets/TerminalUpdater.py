@@ -2,7 +2,7 @@
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Hooks import Hooks, GlobalHooks, HookedDict
 from GeekyGadgets.Threads import *
-from GeekyGadgets.Iterators import TakeWhile, Batched
+from GeekyGadgets.Iterators import Batched, Alternate, Repeat
 from GeekyGadgets.This import this
 from GeekyGadgets.Logging import Logged
 from GeekyGadgets.Classy import Default
@@ -17,73 +17,99 @@ _NOT_FOUND = object()
 class Indicator(Logged):
 	
 	FINISHED : bool = property(lambda self: all(value in self.FINISHED_CODES for value in self.threads.values()))
-	RUN_LOCK : RLock = Default(lambda self: RLock())
+	RUN_LOCK : Lock = Default(lambda self: Lock())
 	STOP : bool = False
 	FINISHED_CODES = (2, 3, None)
 	FAST_UPDATE = True
+	FAILED : bool = property(lambda self: None in self.threads.values())
+	SUCCEEDED : bool = property(lambda self: all(v is not None and v>1 for v in self.threads.values()))
+	SKIPPED : bool = property(lambda self: all(v==2 for v in self.threads.values()))
 	
 	out : TextIO = Default(lambda self: sys.stdout)
 	rowLock : RLock = Default(lambda self: RLock())
 	refresh : Event = Default(lambda self: Event())
 	threads : HookedDict[str,float]
-	running : bool = property(lambda self: self.RUN_LOCK.acquire(False))
+	running : bool = property(lambda self: not self.RUN_LOCK.acquire(False))
+	startTime : float
 
+	category : str
+	prompt : str
+	status : str # property
 	color : AnsiTheme = DefaultTheme
 	sep : str = " "
 	symbols : tuple[str]
 	borders : tuple[str,str] = ("[", "]")
 	finishSymbol : str = "="
 	crashSymbol : str = "X"
-	rowTemplate : str
+	header : str # property
+	spacer : str = property(lambda self: " " * self.width)
+	body : str # property
 	
 	length : int = Default["width"](lambda self: min(max(map(len, self.names)), self.width-2*self.sepLength))
 	sepLength : int	= property(lambda self:len(self.sep))
 	borderLength : int = property(lambda self:sum(len(self.borders[0]), len(self.borders[1])))
 	innerLength : int = property(lambda self:self.length - self.borderLength)
 	
-	width : int = property(lambda self: os.get_terminal_size()[0] if ISATTY else 80, lambda self, value: setattr(self, "DEFAULT_WIDTH", value))
+	width : int = property(
+		lambda self: getattr(self, "DEFAULT_WIDTH", None) or (os.get_terminal_size()[0] if ISATTY else 80),
+		lambda self, value: setattr(self, "DEFAULT_WIDTH", value),
+		lambda self: delattr(self, "DEFAULT_WIDTH"))
 	
 	names : tuple[str] = Default["threads"](lambda self: tuple(sorted(self.threads.keys())))
 	shortKeys : tuple[str] = Default["threads"](lambda self: [name if len(name) < self.length else name[:self.length-3]+"..." for name in self.names])
 	N : int = Default["threads"](lambda self: len(self.names))
 
 	@overload
-	def __init__(self, /, message : str, ): ...
+	def __init__(self, /, category : str, threads : HookedDict): ...
 	@overload
-	def __init__(self, /, message : str, threads : HookedDict): ...
+	def __init__(self, /, category : str, threads : HookedDict, length : int): ...
 	@overload
-	def __init__(self, /, message : str, threads : HookedDict, length : int): ...
-	@overload
-	def __init__(self, /, message : str, threads : HookedDict, length : int, *, out : TextIO, color : AnsiTheme, width : int, refresh : Event, rowLock : RLock): ...
-	def __init__(self, /, message : str, threads : HookedDict, length : int=None, **kwargs):
+	def __init__(self, /, category : str, threads : HookedDict, length : int, *, message : str="{status} {category}", out : TextIO, color : AnsiTheme, width : int, refresh : Event, rowLock : RLock): ...
+	def __init__(self, /, category : str, threads : HookedDict, length : int=None, message : str="{status} {category}", **kwargs):
 		
+		self.category = category
 		self.message = message
 		self.threads = threads
 		self.length = length or self.length
 		for name, value in kwargs.items():
 			setattr(self, name, value)
 
+	@property
+	def status(self):
+		if all(v < 0 for v in self.threads.values()):
+			return self.color.pre("Prepare")
+		elif sum(v < 0 for v in self.threads.values()) < sum(0 <= v < 1.0 for v in self.threads.values()):
+			return self.color.progress("Running")
+		elif any(v == 1.0 for v in self.threads.values()):
+			return self.color.post("Finishing")
+		elif self.FAILED:
+			return self.color.bad("Stopped")
+		elif self.SKIPPED:
+			return self.color.good("Skipped")
+		elif self.SUCCEEDED:
+			return self.color.good("Finished")
+		else:
+			return self.color.warning("Interrupted")
+	
+	@property
+	def header(self):
+		message = self.message.format(category=self.category, status=self.status)
+		if self.width-2-len(self.message) < 12:
+			
+			return f"{message}:".ljust(self.width) + timeFormat(timer() - self.startTime).rjust(self.width)
+		else:
+			return f"{message}: {timeFormat(timer() - self.startTime)}".ljust(self.width)
+
 	@Default["width", "N"]
-	def rowTemplate(self, width, N) -> str:
-		firstRow = f"{self.message}: {{time:<{width-2-len(self.message)}}}"
-		spacerRow = " " * width
+	def body(self) -> str:
 		
-		maxCols = (width+self.sepLength-2) // (self.length+self.sepLength)
+		maxCols = (self.width+self.sepLength-2) // (self.length+self.sepLength)
 		
-		namesList = []
-		for cols in Batched(map(lambda i: f"{{names[{i}]:^{self.length}}}", range(N)), maxCols):
-			namesList.append(" "+self.sep.join(cols) + " "*(width-1-len(cols)*(self.length+self.sepLength)+self.sepLength))
-		barsList = []
-		for cols in Batched(map(lambda i: f"{{bars[{i}]:^{self.length}}}", range(N)), maxCols):
-			barsList.append(" "+self.sep.join(cols) + " "*(width-1-len(cols)*(self.length+self.sepLength)+self.sepLength))
+		namesIter = Batched(map(lambda i: f"{{names[{i}]:^{self.length}}}", range(self.N)), maxCols)
+		barsIter = Batched(map(lambda i: f"{{bars[{i}]:^{self.length}}}", range(self.N)), maxCols)
 		
-		rowTemplate = [firstRow, spacerRow]
-		for namesRow, barsRow in zip(namesList, barsList):
-			rowTemplate.append(namesRow)
-			rowTemplate.append(barsRow)
-			rowTemplate.append(spacerRow)
-		
-		return "".join(rowTemplate)
+		createRow = lambda cols: " "+self.sep.join(cols) + " "*(self.width-1-len(cols)*(self.length+self.sepLength)+self.sepLength)
+		return "".join( map(createRow, Alternate(Repeat(self.spacer), namesIter, barsIter)))
 
 	@property
 	def rowGenerator(self) -> Generator[tuple[int,str],None,None]:
@@ -99,13 +125,15 @@ class Indicator(Logged):
 
 	def run(self):
 		
-		startTime = timer()
-		flushPrint = RePrinter(self.out)
+		self.startTime = timer()
 
-		with self.RUN_LOCK:
+		with RePrinter(self.out) as printer, self.RUN_LOCK:
 			while not self.FINISHED and not self.STOP:
 				with self.rowLock:
-					flushPrint(self.rowTemplate.format(time=timeFormat(timer()-startTime), names=self.shortKeys, bars=tuple(self.rowGenerator)))
+					printer.clear()
+					printer(self.header)
+					printer(self.spacer)
+					printer(self.body.format(names=self.shortKeys, bars=tuple(self.rowGenerator)))
 				
 				if self.FINISHED or self.STOP: break
 
@@ -113,14 +141,11 @@ class Indicator(Logged):
 				self.refresh.wait(timeout=0.40)
 			
 			with self.rowLock:
-				if None in self.threads.values():
-					flushPrint(self.rowTemplate.format(time=self.color.bad('Failed!')+" "+timeFormat(timer()-startTime), names=self.shortKeys, bars=tuple(self.rowGenerator)))
-				elif self.FINISHED:
-					flushPrint.clear()
-					flushPrint(self.message+": "+self.color.good('Done!')+" "+timeFormat(timer()-startTime))
-				else:
-					flushPrint(self.rowTemplate.format(time=self.color.warning('Interrupted!')+" "+timeFormat(timer()-startTime), names=self.shortKeys, bars=tuple(self.rowGenerator)))
-				print(flush=True, file=self.out)
+				printer.clear()
+				printer(self.header)
+				if not self.SUCCEEDED:
+					printer(self.spacer)
+					printer(self.body.format(names=self.shortKeys, bars=tuple(self.rowGenerator)))
 
 	def update(self):
 		if self.FAST_UPDATE:
@@ -139,15 +164,14 @@ class Indicator(Logged):
 		self.STOP = True
 		self.refresh.set()
 		with self.RUN_LOCK:
-			return
+			pass
 
 class Timer(Indicator):
 
 	FAST_UPDATE = False
 
-	@cached_property
-	def rowTemplate(self):
-		return f"{self.message}: [N={len(self.names)}] {{time}}"
+	spacer : str = ""
+	body : str = ""
 
 	@property
 	def rowGenerator(self) -> Generator[str,None,None]:
@@ -280,15 +304,17 @@ class TerminalUpdater(Logged):
 	out : TextIO = None
 	indicator : Indicator
 
+	running = property(lambda self: self.indicator.running)
+
 	@overload
-	def __init__(self, message, category, names : Iterable[Hashable], /): ...
+	def __init__(self, category, names : Iterable[Hashable], /): ...
 	@overload
-	def __init__(self, message, category, N : int, /): ...
+	def __init__(self, category, N : int, /): ...
 	@overload
-	def __init__(self, message, category, names : Iterable[Hashable], /, *, hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicatorType : Indicator=Timer, **indicatorArgs): ...
+	def __init__(self, category, names : Iterable[Hashable], /, *, message : str="{status} {category}", hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicatorType : Indicator=Timer, **indicatorArgs): ...
 	@overload
-	def __init__(self, message, category, N : int, /, *, hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicatorType : Indicator=Timer, **indicatorArgs): ...
-	def __init__(self, message, category, names, /, *, hooks : Hooks=GlobalHooks, out=None, indicatorType : Indicator=Timer, **indicatorArgs):
+	def __init__(self, category, N : int, /, *, message : str="{status} {category}", hooks : Hooks=GlobalHooks, out : TextIO=sys.stdout, indicatorType : Indicator=Timer, **indicatorArgs): ...
+	def __init__(self, category, names, /, *, message : str="{status} {category}", hooks : Hooks=GlobalHooks, out=None, indicatorType : Indicator=Timer, **indicatorArgs):
 		
 		self.message = message
 		self.category = category
@@ -306,7 +332,7 @@ class TerminalUpdater(Logged):
 		self.hooks.addHook("HookedDict", self.updateIndicator)
 		self.hooks.addHook(self.category, self.progressCallback)
 
-		self.indicator = indicatorType(self.message, self.category, threads=self.threads, hooks=self.hooks, out=self.out, **indicatorArgs)
+		self.indicator = indicatorType(self.category, threads=self.threads, message=self.message, hooks=self.hooks, out=self.out, **indicatorArgs)
 
 	def __enter__(self):
 		self.start()
