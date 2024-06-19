@@ -3,6 +3,10 @@ from GeekyGadgets.Globals import *
 from GeekyGadgets.SpecialTypes import NameSpace
 from GeekyGadgets.Formatting.Case import KebabCase
 
+class CSS(dict):
+	def __repr__(self):
+		return repr("; ".join(map("{0[0]} : {0[1]}".format, self)))
+
 class Tag:
 	
 	content : list["Tag"]
@@ -11,7 +15,7 @@ class Tag:
 	def __init__(self, name : str, *content : "str|Tag", **attributes) -> None:
 		self.name = name
 		self.content = list(content)
-		self.attributes = NameSpace({KebabCase(name):value for name, value in attributes.items()})
+		self.attributes = NameSpace({KebabCase(name):value if name != "style" else CSS(value) for name, value in attributes.items()})
 
 	def __iter__(self):
 		for element in self.content:

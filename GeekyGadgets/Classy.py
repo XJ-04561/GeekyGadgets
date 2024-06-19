@@ -130,19 +130,17 @@ class Default(property):
 			return ret
 	
 	def __set__(self, instance, value):
-		if self.fset is None:
-			instance.__dict__[self.name] = value
-		else:
+		instance.__dict__[self.name] = value
+		if self.fset:
 			self.fset(instance, value)
 	
 	def __delete__(self, instance):
-			if self.fdel is not None:
-				self.fdel(instance)
-			else:
-				if self.name in getattr(instance, "__dict__", ()):
-					del instance.__dict__[self.name]
-				if f"_default_{self.name}" in getattr(instance, "__dict__", ()):
-					del instance.__dict__[f"_default_{self.name}"]
+		if self.fdel:
+			self.fdel(instance)
+		if self.name in getattr(instance, "__dict__", ()):
+			del instance.__dict__[self.name]
+		if f"_default_{self.name}" in getattr(instance, "__dict__", ()):
+			del instance.__dict__[f"_default_{self.name}"]
 
 class ClassProperty:
 	"""Similar to `builtins.property` but will generate the callback-returned value when accessed through the class 

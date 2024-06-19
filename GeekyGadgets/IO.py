@@ -2,9 +2,10 @@
 from types import TracebackType
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Classy import Default
-from GeekyGadgets.Threads import RLock
+from GeekyGadgets.Threads import RLock, Thread, DummyThread
 from GeekyGadgets.SpecialTypes import LimitedList
 from GeekyGadgets.Functions import swapAttr
+
 
 from io import *
 
@@ -187,71 +188,102 @@ class SplitTextIO(SplitIO):
 		
 		super().__init__(files=files)
 
-class LocalBufferIO(LimitedList, IO):
-	
-	size : int = property(lambda self: sum(map(len, self)))
-	closed = False
-
-	def read(self, n: int = -1) -> tuple[AnyStr]:
-		_iter = iter(self)
-		for row in _iter:
-			out = row
-			break
-		else:
-			return ""
-		for row in _iter:
-			out = out + row
-			if n > 0 and len(out) > n:
-				return out[:n]
-		return out
-
-	def readlines(self, hint: int = -1) -> List[AnyStr]:
-		return list(self)
-
-	def write(self : "LocalBufferIO[_T]", s : _T):
-		self.append(s)
-	
-	def writelines(self : "LocalBufferIO[_T]", lines : Iterable[_T]):
-		self.extend(lines)
-
-	def fileno(self):
-		return -1
-
-	def flush(self):
-		pass
-
 class LocalIO(list, IO):
 	
 	size : int = property(lambda self: sum(map(len, self)))
 	closed = False
+	coupled : Thread = DummyThread()
+	streamLock : RLock = Default(lambda self:RLock())
 
 	def read(self, n: int = -1) -> tuple[AnyStr]:
-		_iter = iter(self)
-		for row in _iter:
-			out = row
-			break
-		else:
-			return ""
-		for row in _iter:
-			out = out + row
-			if n > 0 and len(out) > n:
-				return out[:n]
-		return out
+		with self.streamLock:
+			_iter = iter(self)
+			for row in _iter:
+				out = row
+				break
+			else:
+				return ""
+			for row in _iter:
+				out = out + row
+				if n > 0 and len(out) > n:
+					return out[:n]
+			return out
 
 	def readlines(self, hint: int = -1) -> List[AnyStr]:
-		return list(self)
+		with self.streamLock:
+			return list(self)
 
 	def write(self : "LocalIO[_T]", s : _T):
-		self.append(s)
+		with self.streamLock:
+			self.append(s)
 	
 	def writelines(self : "LocalIO[_T]", lines : Iterable[_T]):
-		self.extend(lines)
+		with self.streamLock:
+			self.extend(lines)
 
 	def fileno(self):
 		return -1
 
 	def flush(self):
 		pass
+
+	def _read_loop(localIO : "LocalIO", readableIO : IO):
+		while line := readableIO.readline(): localIO.write(line)
+		readableIO.close()
+
+	def couple(self, readableIO : IO, /):
+		from GeekyGadgets.Threads import Thread
+		if "b" in readableIO.mode:
+			self.coupled = Thread(target=self._read_loop, args=(TextIOWrapper(readableIO, errors="backslashreplace"), ))
+		else:
+			self.coupled = Thread(target=self._read_loop, args=(readableIO,))
+		self.coupled.start()
+
+class LocalBufferIO(LimitedList, LocalIO):
+	
+	size : int = property(lambda self: sum(map(len, self)))
+	# closed = False
+
+	# def read(self, n: int = -1) -> tuple[AnyStr]:
+	# 	_iter = iter(self)
+	# 	for row in _iter:
+	# 		out = row
+	# 		break
+	# 	else:
+	# 		return ""
+	# 	for row in _iter:
+	# 		out = out + row
+	# 		if n > 0 and len(out) > n:
+	# 			return out[:n]
+	# 	return out
+
+	# def readlines(self, hint: int = -1) -> List[AnyStr]:
+	# 	return list(self)
+
+	# def write(self : "LocalBufferIO[_T]", s : _T):
+	# 	self.append(s)
+	
+	# def writelines(self : "LocalBufferIO[_T]", lines : Iterable[_T]):
+	# 	self.extend(lines)
+
+	# def fileno(self):
+	# 	return -1
+
+	# def flush(self):
+	# 	pass
+
+	# def _read_loop(localBufferIO : "LocalBufferIO", readableIO : IO):
+	# 	while line := readableIO.readline():
+	# 		localBufferIO.write(line)
+	# 	readableIO.close()
+	
+	# def couple(self, readableIO : IO, /):
+	# 	from GeekyGadgets.Threads import Thread
+	# 	if "b" in readableIO.mode:
+	# 		self.coupled = Thread(target=self._read_loop, args=(TextIOWrapper(readableIO, errors="backslashreplace"), ))
+	# 	else:
+	# 		self.coupled = Thread(target=self._read_loop, args=(readableIO,))
+	# 	self.coupled.start()
 
 class ReplaceIO(IO):
 	
@@ -316,6 +348,8 @@ class ReplaceSTDIO(ReplaceIO):
 	def __init__(self, /, container : IO[str|bytes]=LocalIO): ...
 	def __init__(self, /, container : IO[str|bytes]=None):
 		self.container = container or LocalIO()
+
+
 class SiphonSTDIO(ReplaceSTDIO, SiphonIO): pass
 
 @staticmethod

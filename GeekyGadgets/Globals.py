@@ -15,6 +15,7 @@ DEV_NULL_BYTES = open(os.devnull, "wb")
 ISATTY = sys.stdout.isatty()
 
 class _NULL:
+	def __call__(self, *args, **kwargs): return NULL
 	def __repr__(self): return "NULL"
 	def __str__(self): return "0"
 	def __bool__(self): return False

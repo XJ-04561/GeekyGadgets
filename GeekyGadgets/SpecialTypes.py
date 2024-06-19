@@ -128,7 +128,7 @@ class NameSpace(dict, Spaces):
 		for name, value in dict.items(self):
 			yield (name, value)
 	def __str__(self):
-		return " ".join(map("{0[0]}={0[0]!r}".format, self))
+		return " ".join(map("{0[0]}={0[1]!r}".format, self))
 
 	def __getitem__(self, key):
 		ret = dict.get(self, key, NULL)
@@ -147,6 +147,20 @@ class NameSpace(dict, Spaces):
 	
 	def __repr__(self):
 		return f"NameSpace {GETATTR(self, '__name__')!r}"
+
+class NullSpace(Spaces):
+
+	def __getattribute__(self, name: str) -> Any:
+		return NULL
+	
+	def __setattr__(self, name: str, value: Any) -> None:
+		pass
+	
+	def __getitem__(self, key: Any) -> Any:
+		return NULL
+	
+	def __setitem__(self, key: Any, value: Any) -> None:
+		pass
 
 class HybridSpace(NameSpace, LinkedSpace):
 	

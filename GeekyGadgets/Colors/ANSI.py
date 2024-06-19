@@ -179,6 +179,8 @@ class RedText(AnsiStr):
 	color = "Red"
 class GreenText(AnsiStr):
 	color = "Green"
+class BlueText(AnsiStr):
+	color = "Blue"
 class CyanText(AnsiStr):
 	color = "Cyan"
 

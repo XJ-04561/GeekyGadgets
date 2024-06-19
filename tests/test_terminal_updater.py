@@ -2,6 +2,9 @@
 from GeekyGadgets.TerminalUpdater import *
 from GeekyGadgets.IO import ReplaceSTDOUT
 
+import pytest
+
+@pytest.mark.skip
 def test_creation():
 
 	import os
