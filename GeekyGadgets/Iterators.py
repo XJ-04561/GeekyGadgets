@@ -35,8 +35,11 @@ _E5 = TypeVar("_E5")
 _E6 = TypeVar("_E6")
 
 class Row(tuple):
+	def __new__(cls, iterable: Iterable = ()) -> Self:
+		obj = super().__new__(cls, iterable)
+		obj._iterator = tuple.__iter__(obj)
+		return obj
 	def __iter__(self):
-		self._iterator = super().__iter__()
 		return self
 	def __next__(self):
 		return next(self._iterator)
@@ -59,11 +62,14 @@ class Alternate(Subscriptable):
 	def __init__(self, *iterables : Iterable, strict : bool=False):
 		self.iterator = Zip(*iterables, strict=strict)
 		self.iterator.rowFactory = Row
+		self.row = Row()
 	
 	def __iter__(self):
 		return self
 	
 	def __next__(self):
+		for item in self.row:
+			return item
 		for row in self.iterator:
 			self.row = Row(row)
 			for item in self.row:
@@ -111,17 +117,23 @@ class DropThenTakeWhile:
 			else:
 				self.stopKey = stopKey
 
-		self.iterator = iterable if isinstance(iterable, Iterator) else iter(iterable)
+		self.iterator = TakeWhile(self.stopKey, DropWhile(self.startKey, iterable))
 	
 	def __iter__(self):
 		return self
 	
 	def __next__(self):
-		next(TakeWhile(self.stopKey, DropWhile(self.startKey, self.iterator)))
+		return next(self.iterator)
 
-class ChainChain(Chain):
+class ChainChain:
 	def __init__(self, *iterables: Iterable) -> None:
-		super().__init__(*(Chain(iterable) for iterable in iterables))
+		self.iterator = Chain(*(Chain(*iterable) for iterable in iterables))
+	
+	def __iter__(self):
+		return self
+	
+	def __next__(self):
+		return next(self.iterator)
 
 _T1 = TypeVar("_T1")
 _T2 = TypeVar("_T2")
@@ -159,6 +171,9 @@ class Grouper(Subscriptable):
 		else:
 			self.keys = list(reversed(tuple(keys)))
 	
+	def __iter__(self):
+		return self
+
 	def __next__(self):
 		if not self.keys:
 			raise StopIteration()
@@ -216,7 +231,7 @@ class BranchesWalker(Walker):
 
 	def __next__(self) -> _E:
 		for item in self._iterator:
-			if not isinstance(item, Iterable):
+			if isinstance(item, Iterable):
 				return item
 		else:
 			raise StopIteration(f"{self} came to a stop.")

@@ -73,10 +73,10 @@ class Spaces(ABC):
 	def __setitem__(self, key: str, value: Any):
 		return super().__setitem__(key, value)
 
-class LinkSpace(Spaces):
+class LinkedSpace(Spaces):
 
 	@overload
-	def __init__(self, source : str=None, /): ...
+	def __init__(self, source : object=None, /): ...
 	@overload
 	def __init__(self, source : object, name : str=None, /): ...
 	def __init__(self, source : object, name : str=None, /):
@@ -95,7 +95,7 @@ class LinkSpace(Spaces):
 	def __getattribute__(self, name: str) -> Any:
 		return getattr(GETATTR(self, "__source__"), name)
 	
-	def __setattribute__(self, name: str, value : Any) -> None:
+	def __setattr__(self, name: str, value : Any) -> None:
 		return setattr(GETATTR(self, "__source__"), name, value)
 	
 	def __repr__(self):
@@ -124,6 +124,12 @@ class NameSpace(dict, Spaces):
 		else:
 			TypeError(f"The first positional argument must be either a dict, an iterable, or a str. Not {type(first)}.")
 	
+	def __iter__(self):
+		for name, value in dict.items(self):
+			yield (name, value)
+	def __str__(self):
+		return " ".join(map("{0[0]}={0[0]!r}".format, self))
+
 	def __getitem__(self, key):
 		ret = dict.get(self, key, NULL)
 		if ret is NULL:
@@ -136,22 +142,22 @@ class NameSpace(dict, Spaces):
 	def __getattribute__(self, name: str) -> Any:
 		return self[name]
 	
-	def __setattribute__(self, name: str, value : Any) -> None:
+	def __setattr__(self, name: str, value : Any) -> None:
 		self[name] = value
 	
 	def __repr__(self):
 		return f"NameSpace {GETATTR(self, '__name__')!r}"
 
-class HybridSpace(NameSpace, LinkSpace):
+class HybridSpace(NameSpace, LinkedSpace):
 	
-	__link_spaces__ : list[LinkSpace]
+	__link_spaces__ : list[LinkedSpace]
 
 	@overload
 	def __init__(self, source : object, iterable : Iterable, /, **kwargs): ...
 	@overload
 	def __init__(self, source : object, iterable : Iterable, name : str, /, **kwargs): ...
 	def __init__(self, source : object, iterable=None, name=None, /, **kwargs):
-		SETATTR(self, "__link_spaces__", [LinkSpace(self, source, name)])
+		SETATTR(self, "__link_spaces__", [LinkedSpace(self, source, name)])
 		NameSpace.__init__(self, iterable, name, **kwargs)
 
 	def __getitem__(self, key):
@@ -174,7 +180,7 @@ class HybridSpace(NameSpace, LinkSpace):
 		if isinstance(iterable, NameSpace):
 			for name, value in dict.items(iterable):
 				self[name] = value
-		elif isinstance(iterable, LinkSpace):
+		elif isinstance(iterable, LinkedSpace):
 			GETATTR(self, "__link_spaces__").append(iterable)
 		elif isinstance(iterable, dict):
 			for name, value in iterable.items():
@@ -274,7 +280,10 @@ class LimitedDict(LimitedIterable, dict):
 
 	def shift(self : "LimitedDict[_T]") -> _T:
 		with self._lock:
-			return self.pop(next(iter(self.keys())))
+			try:
+				return self.pop(next(iter(self.keys())))
+			except StopIteration:
+				raise KeyError(f"{self} is empty.")
 
 	@postShave
 	def setdefault(self: "LimitedDict", key: Any, default: Any=None, /) -> Any:

@@ -6,14 +6,16 @@ import GeekyGadgets.Formatting.Case as Case
 pluralPattern = re.compile(r"s$|x$|z$|sh$|ch$")
 hiddenPattern = re.compile(r"^_[^_].*")
 
+_ALPHA_INDEX = 65
+_ALPHA_LENGTH = 26
 @cache
 def alphabetize(n : int):
-	m = n
-	out = []
+	m, r = divmod(n, _ALPHA_LENGTH)
+	out = [_ALPHA_INDEX+r]
 	while m > 0:
-		out.append("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[n%26])
-		m //= 26
-	return "".join(out)
+		m, r = divmod(m, _ALPHA_LENGTH)
+		out.append(_ALPHA_INDEX+r-1)
+	return bytes(reversed(out)).decode("ascii")
 
 def pluralize(string : str) -> str:
 	match pluralPattern.search(string):

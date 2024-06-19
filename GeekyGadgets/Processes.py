@@ -6,6 +6,7 @@ from GeekyGadgets.Classy import Default
 from GeekyGadgets.This import this
 from GeekyGadgets.Threads import Thread
 from GeekyGadgets.Functions import first
+from GeekyGadgets.IO import LocalIO
 
 from subprocess import Popen, PIPE
 import subprocess
@@ -74,14 +75,13 @@ class Command:
 	_thread : Thread = None
 
 	@overload
-	def __init__(self, args : str, category : str="Command", name : str="Process", hooks : Hooks=GlobalHooks, dir : Path=Path(".")): ...
+	def __init__(self, args : str, category : str="Command", name : str=None, hooks : Hooks=GlobalHooks, dir : Path=Path(".")): ...
 	@overload
-	def __init__(self, args : list[str], category : str="Command", name : str="Process", hooks : Hooks=GlobalHooks, dir : Path=Path(".")): ...
-	def __init__(self, args, category="Command", name="Process", hooks=GlobalHooks, dir=Path(".")):
+	def __init__(self, args : list[str], category : str="Command", name : str=None, hooks : Hooks=GlobalHooks, dir : Path=Path(".")): ...
+	def __init__(self, args, category="Command", name=None, hooks=GlobalHooks, dir=Path(".")):
 		
 		self.hooks = hooks
 		self.category = category
-		self.name = name
 		if isinstance(args, Iterator):
 			args = list(args)
 		
@@ -95,7 +95,7 @@ class Command:
 		self.processes = evalCommand(self.args, dir=dir, hooks=hooks)
 		for i, p in enumerate(self.processes):
 			p.category = self.category
-			p.name = f"{self.name}-{i}"
+		self.name = name or self.processes.name
 	
 	def __str__(self):
 		return "".join(map(str, self.processes))
@@ -124,6 +124,9 @@ class Command:
 				p.wait()
 		return self.exitcodes
 	
+	def dumpLogs(self):
+		self.processes.dumpLogs()
+	
 	def checkReadiness(self):
 		if self.notOnPath:
 			raise MissingDependency(f"Could not find dependencies: {', '.join(self.notOnPath)}")
@@ -148,9 +151,9 @@ class Command:
 
 class Process:
 
-	OUT : BufferedWriter = Default(lambda self: self.ERR if self.filename == self.logname else open(self.filename, "wb"))
-	ERR : BufferedWriter = Default(lambda self: open(self.logname, "wb"))
-	IN : BufferedReader = Default(lambda self: self.parent.OUT if self.parent and self.parent.OUT and not self.parent.OUT.closed and self.parent.OUT.readable() else None)
+	OUT : BufferedWriter = Default(lambda self: LocalIO())
+	ERR : BufferedWriter = Default(lambda self: LocalIO())
+	IN : BufferedReader = Default(lambda self: self.parent.OUT if self.parent and self.parent.OUT is not None and not self.parent.OUT.closed and self.parent.OUT.readable() else None)
 	RUNNING : bool
 	EXITCODES : int | list[int] = property(lambda self: [self.popen.returncode] + self.child.EXITCODES if self.child else [self.popen.returncode])
 	SUCCESS : bool = property(lambda self: self.popen.returncode == 0 and (self.child.SUCCESS if self.child else True))
@@ -164,7 +167,7 @@ class Process:
 	name : str
 	dir : Path
 	logname : Path = Default["name"](lambda self: self.dir / f"{self.name}.log")
-	filename : Path = Default["name"](lambda self: self.logname)
+	filename : Path = Default["name"](lambda self: self.dir / f"{self.name}.out")
 	hooks : Hooks
 
 	popen : Popen
@@ -176,7 +179,7 @@ class Process:
 		self.args = args
 		self.popen = FakePopen()
 		self.category = category
-		self.name = name or '_'.join(filter(WORD_PATTERN.fullmatch, self.args[:2]))
+		self.name = name or '_'.join(filter(WORD_PATTERN.fullmatch, map(lambda x:os.path.basename(os.path.splitext(x)[0]), self.args[:2])))
 		self.dir = Path(dir)
 		if logname: self.logname = self.dir / logname
 		if filename: self.filename = self.dir / filename
@@ -194,7 +197,9 @@ class Process:
 	def run(self):
 		
 		self.popen = Popen(args=self.args, stdin=self.IN, stderr=self.ERR, stdout=self.OUT)
-		self.OUT, self.ERR, self.IN = self.popen.stdout, self.popen.stderr, self.popen.stdin
+		if self.popen.stdout: self.OUT = self.popen.stdout
+		if self.popen.stderr: self.ERR = self.popen.stderr
+		if self.popen.stdin: self.IN = self.popen.stdin
 		
 		try:
 			if not self.OUT.readable():
@@ -222,6 +227,12 @@ class Process:
 			else:
 				self.hooks.trigger(self.category, {"name" : self.name, "type" : "Failed"})
 	
+	def dumpLogs(self):
+		if isinstance(self.ERR, IO): open(self.logname, "w").write(self.ERR.read())
+		if isinstance(self.OUT, IO): open(self.filename, "w").write(self.OUT.read())
+		if self.child:
+			self.child.dumpLogs()
+
 	@property
 	def RUNNING(self):
 		try:

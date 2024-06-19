@@ -27,6 +27,7 @@ def test_process_single():
 		
 		command.start()
 		command.wait()
+		command.dumpLogs()
 
 		assert command.exitcodes == returncodes
 		assert command.success == success
@@ -55,6 +56,7 @@ def test_process_logic():
 		
 		command.start()
 		command.wait()
+		command.dumpLogs()
 
 		assert command.exitcodes == returncodes
 		assert command.success == success
@@ -82,6 +84,7 @@ def test_process_pipe():
 		
 		command.start()
 		command.wait()
+		command.dumpLogs()
 
 		assert command.exitcodes == returncodes
 		assert command.success == success
@@ -89,3 +92,33 @@ def test_process_pipe():
 	assert open(os.path.join(".", "pipe_1", "simplepipe.txt"), "r").read() == "Start\n0\n1\n4\n9\n16\n25\n"
 	assert open(os.path.join(".", "pipe_2", "doublepipe.txt"), "r").read() == "Start\n0\n1\n8\n27\n64\n125\n"
 	assert open(os.path.join(".", "pipe_3", "longpipe.txt"), "r").read() == "Start\n0\n1\n64\n729\n4096\n15625\n"
+
+
+def test_process_capture_pipe():
+
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	COMMANDS = [
+		(f"{EXE} startpipe.py", [0], True),
+	]
+	
+	for i, (commandString, returncodes, success) in enumerate(COMMANDS):
+		outDir = os.path.join(".", f"capture_pipe_{i+1}")
+		os.makedirs(outDir, exist_ok=True)
+
+		command = Command(commandString, dir=outDir)
+		
+		assert len(command.processes) == len(returncodes)
+
+		assert not command.success
+		
+		command.start()
+		command.wait()
+		command.dumpLogs()
+
+		assert command.exitcodes == returncodes
+		assert command.success == success
+
+	assert open(os.path.join(".", "capture_pipe_1", "python3_startpipe.out"), "r").read() == "Start\n0\n1\n4\n9\n16\n25\n"
+	assert command.processes[0].OUT.read() == "Start\n0\n1\n4\n9\n16\n25\n"

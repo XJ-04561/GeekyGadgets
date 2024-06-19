@@ -104,7 +104,9 @@ if supportsColor():
 		@overload
 		def __new__(cls, text : str, *, color : str, background : str, fontStyles : str): ...
 		def __new__(cls, text : str, *, color : str=None, background : str=None, fontStyles : str=None):
-			return super().__new__(cls, colors.color(text, color or getattr(cls, "color", None), background or getattr(cls, "background", None), fontStyles or getattr(cls, "fontStyles", None)))
+			obj = super().__new__(cls, colors.color(text, color or getattr(cls, "color", None), background or getattr(cls, "background", None), fontStyles or getattr(cls, "fontStyles", None)))
+			obj.raw = text
+			return obj
 
 		def __format__(self, fs : str):
 			if match := FORMAT_PATTERN.fullmatch(fs):
@@ -129,10 +131,6 @@ if supportsColor():
 			return type(self)(str.__add__(self, right))
 		def __radd__(self, left):
 			return type(self)(str.__add__(left, self))
-		
-		@cached_property
-		def raw(self):
-			return ANSI_MATCH.sub("", self)
 else:
 	class AnsiStr(str, ColorObject):
 		"""# THE PYTHON ENVIRONMENT THAT IS RUNNING DOES NOT SUPPORT ANSI CODES, AND THIS CLASS IS THEREFORE JUST A 

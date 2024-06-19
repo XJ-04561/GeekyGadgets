@@ -187,15 +187,19 @@ class SplitTextIO(SplitIO):
 		
 		super().__init__(files=files)
 
-class LocalBufferIO(LimitedList):
+class LocalBufferIO(LimitedList, IO):
 	
 	size : int = property(lambda self: sum(map(len, self)))
+	closed = False
 
 	def read(self, n: int = -1) -> tuple[AnyStr]:
-		for row in self:
+		_iter = iter(self)
+		for row in _iter:
 			out = row
 			break
-		for row in self:
+		else:
+			return ""
+		for row in _iter:
 			out = out + row
 			if n > 0 and len(out) > n:
 				return out[:n]
@@ -210,18 +214,25 @@ class LocalBufferIO(LimitedList):
 	def writelines(self : "LocalBufferIO[_T]", lines : Iterable[_T]):
 		self.extend(lines)
 
+	def fileno(self):
+		return -1
+
 	def flush(self):
 		pass
 
-class LocalIO(list):
+class LocalIO(list, IO):
 	
 	size : int = property(lambda self: sum(map(len, self)))
+	closed = False
 
 	def read(self, n: int = -1) -> tuple[AnyStr]:
-		for row in self:
+		_iter = iter(self)
+		for row in _iter:
 			out = row
 			break
-		for row in self:
+		else:
+			return ""
+		for row in _iter:
 			out = out + row
 			if n > 0 and len(out) > n:
 				return out[:n]
@@ -235,11 +246,14 @@ class LocalIO(list):
 	
 	def writelines(self : "LocalIO[_T]", lines : Iterable[_T]):
 		self.extend(lines)
-	
+
+	def fileno(self):
+		return -1
+
 	def flush(self):
 		pass
 
-class ReplaceIO:
+class ReplaceIO(IO):
 	
 	outIO : IO[str|bytes]
 	container : IO[str|bytes]
@@ -296,13 +310,13 @@ class SiphonIO(ReplaceIO):
 		self.splitIO.add(old := self.replacerFunc(self.splitIO))
 		self.outIO = old
 
-class ReplaceSTD(ReplaceIO):
+class ReplaceSTDIO(ReplaceIO):
 
 	@overload
 	def __init__(self, /, container : IO[str|bytes]=LocalIO): ...
 	def __init__(self, /, container : IO[str|bytes]=None):
 		self.container = container or LocalIO()
-class SiphonSTD(ReplaceSTD, SiphonIO): pass
+class SiphonSTDIO(ReplaceSTDIO, SiphonIO): pass
 
 @staticmethod
 def swapSTDOUT(new):
@@ -317,17 +331,17 @@ def swapSTDIN(new):
 	"""Swap the current value of `sys.stdin` with that of the `new` argument, and return the old value."""
 	return swapAttr(sys, "stdin", new)
 
-class ReplaceSTDOUT(ReplaceSTD):
+class ReplaceSTDOUT(ReplaceSTDIO):
 	replacerFunc = swapSTDOUT
-class SiphonSTDOUT(SiphonSTD):
+class SiphonSTDOUT(SiphonSTDIO):
 	replacerFunc = swapSTDOUT
 
-class ReplaceSTDERR(ReplaceSTD):
+class ReplaceSTDERR(ReplaceSTDIO):
 	replacerFunc = swapSTDERR
-class SiphonSTDERR(SiphonSTD):
+class SiphonSTDERR(SiphonSTDIO):
 	replacerFunc = swapSTDERR
 
-class ReplaceSTDIN(ReplaceSTD):
+class ReplaceSTDIN(ReplaceSTDIO):
 	replacerFunc = swapSTDIN
-class SiphonSTDIN(SiphonSTD):
+class SiphonSTDIN(SiphonSTDIO):
 	replacerFunc = swapSTDIN
