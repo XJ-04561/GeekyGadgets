@@ -17,6 +17,7 @@ class ThreadGroup:
 			self._dict = {thread.name:thread for thread in iterable}
 			for thread in self._dict.values():
 				thread.group = self
+		from GeekyGadgets.Threads.Thread import Thread
 
 		if not all(isinstance(t, Thread) for t in self):
 			offenders = list(repr(t) for t in self if not isinstance(t, Thread))

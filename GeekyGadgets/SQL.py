@@ -9,6 +9,8 @@ from GeekyGadgets.Logging import Logged
 from GeekyGadgets.Threads.Thread import *
 from GeekyGadgets.Threads.Synch import *
 
+__all__ = ("ThreadConnection", "sqlite3")
+
 class CursorLike:
 	def __init__(self, data : list):
 		self.data = data

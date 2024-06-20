@@ -3,8 +3,8 @@ GEEKY_GADGETS_INIT = True
 
 from GeekyGadgets.URL import *
 import GeekyGadgets.TypeHinting as TypeHinting
-from GeekyGadgets.Threads import (DummyLock, ThreadGroup, ThreadConnection, DelayedCall, Lock, RLock, Condition,
-								  Semaphore, BoundedSemaphore, Event, Barrier, BrokenBarrierError, Thread, Future)
+from GeekyGadgets.Threads import *
+from GeekyGadgets.SQL import *
 from GeekyGadgets.This import *
 from GeekyGadgets.TerminalUpdater import *
 from GeekyGadgets.SpecialTypes import *
