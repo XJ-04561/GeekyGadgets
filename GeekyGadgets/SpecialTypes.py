@@ -127,6 +127,7 @@ class NameSpace(dict, Spaces):
 	def __iter__(self):
 		for name, value in dict.items(self):
 			yield (name, value)
+	
 	def __str__(self):
 		return " ".join(map("{0[0]}={0[1]!r}".format, self))
 

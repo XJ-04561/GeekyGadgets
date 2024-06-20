@@ -7,7 +7,7 @@ screamingSnakeCase : re.Pattern = re.compile("^[A-Z_][A-Z_0-9]*$")
 snakeCase : re.Pattern= re.compile("^[a-z_][a-z_0-9]*$")
 camelCase : re.Pattern= re.compile("^[_]*[a-z][a-zA-Z0-9]*[_]*$")
 pascalCase : re.Pattern= re.compile("^[_]*[A-Z][a-zA-Z0-9]*[_]*$")
-kebabCase : re.Pattern= re.compile("^[a-z_-][a-z_0-9-]*$")
+kebabCase : re.Pattern= re.compile("^[a-z][a-z0-9-]*$")
 
 CASES = [screamingSnakeCase, snakeCase, camelCase, pascalCase, kebabCase]
 
@@ -16,8 +16,8 @@ CASES = [screamingSnakeCase, snakeCase, camelCase, pascalCase, kebabCase]
 # snakeKiller : re.Pattern= re.compile(r"([^_]+)")
 # kebabKiller : re.Pattern= re.compile(r"([^-]+)")
 
-camelKiller : re.Pattern= re.compile(r"(?<=[a-z])(?=[A-Z0-9])")
-pascalKiller : re.Pattern= re.compile(r"(?<=[a-z])(?=[A-Z0-9])")
+camelKiller : re.Pattern= re.compile(r"(?<=[a-z0-9])(?=[A-Z0-9])")
+pascalKiller : re.Pattern= re.compile(r"(?<=[a-z0-9])(?=[A-Z0-9])|(?<=[A-Z0-9])(?=[A-Z0-9]+(?!$))")
 snakeKiller : re.Pattern= re.compile(r"[_]")
 kebabKiller : re.Pattern= re.compile(r"[-]")
 
@@ -28,6 +28,7 @@ class Case(str):
 		for case, caseKiller in zip(CASES, CASE_KILLERS):
 			if case.fullmatch(name):
 				words = caseKiller.split(name)
+				break
 		return super().__new__(str, cls.join(words))
 
 class ScreamingSnakeCase(Case):

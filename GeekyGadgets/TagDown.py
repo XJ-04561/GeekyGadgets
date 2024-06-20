@@ -3,7 +3,7 @@ from GeekyGadgets.Globals import *
 from GeekyGadgets.SpecialTypes import NameSpace
 from GeekyGadgets.Formatting.Case import KebabCase
 
-class CSS(dict):
+class CSS(NameSpace):
 	def __repr__(self):
 		return repr("; ".join(map("{0[0]} : {0[1]}".format, self)))
 
@@ -23,3 +23,12 @@ class Tag:
 
 	def __str__(self):
 		return f"<{self.name} {self.attributes}>{''.join(map(str, self))}</{self.name}>"
+	
+	def __repr__(self):
+		return repr(str(self))
+	
+	def __hash__(self):
+		return hash(str(self))
+	
+	def __eq__(self, other : Hashable):
+		return hasattr(other, "__hash__") and hash(self) == hash(other)

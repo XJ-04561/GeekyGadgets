@@ -364,3 +364,44 @@ class HookedSet(HookedContainer, set):
 	def clear(self) -> None:
 		super().clear()
 		self.hooks(f"{self.__class__.__name__}", {"name" : id(self), "type" : "Removed", "values" : self.copy()})
+
+class ProgressHook:
+
+	category : str
+	hooks : Hooks
+	name : str
+	def __init__(self, category : str, hooks : Hooks, name : str):
+		self.category = category
+		self.hooks = hooks
+		self.name = name
+
+	def __call__(self, progress : float):
+		"""
+		None	-	Service crashed
+		2		-	Never ran/skipped
+		3		-	Completed
+		0<->1	-	Running
+		<0		-	Not started
+		1.0		-	Postprocessing
+		"""
+		if progress == None:
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Failed"})
+		elif progress == 2:
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Skipped"})
+		elif progress == 3:
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Finished"})
+		elif 0 <= progress < 1:
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Progress", "value" : progress})
+		elif progress <0:
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Starting"})
+		elif progress == 1.0:
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "PostProcess"})
+		else:
+			self.hooks.trigger(self.category, {"name" : self.name, "type" : "Failed"})
+	
+	def Starting(self): self.hooks.trigger(self.category, {"name" : self.name, "type" : "Starting"})
+	def Progress(self, progress : float): self.hooks.trigger(self.category, {"name" : self.name, "type" : "Progress", "value" : progress})
+	def PostProcess(self): self.hooks.trigger(self.category, {"name" : self.name, "type" : "PostProcess"})
+	def Failed(self): self.hooks.trigger(self.category, {"name" : self.name, "type" : "Failed"})
+	def Skipped(self): self.hooks.trigger(self.category, {"name" : self.name, "type" : "Skipped"})
+	def Finished(self): self.hooks.trigger(self.category, {"name" : self.name, "type" : "Finished"})
