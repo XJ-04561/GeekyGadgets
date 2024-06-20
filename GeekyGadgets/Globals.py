@@ -35,6 +35,7 @@ EXISTING = _EXISTING()
 
 GETATTR = object.__getattribute__
 SETATTR = object.__setattr__
+SET__DICT__ = lambda obj, attrName, value: GETATTR(obj, "__dict__").__setitem__(attrName, value)
 DELATTR = object.__delattr__
 
 FORMAT_PATTERN = re.compile(r"(?P<filler>[^<^>]+)?(?P<direction>[<^>])?(?P<size>\d+)?(?P<rest>.*)")

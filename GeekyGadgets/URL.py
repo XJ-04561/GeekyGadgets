@@ -1,5 +1,6 @@
 
 from GeekyGadgets.Globals import *
+from GeekyGadgets.Paths import Path, Pathy, pathize
 import urllib.request as ur
 _T = TypeVar("_T")
 
@@ -10,6 +11,20 @@ __all__ = (
 class URLError(Exception): pass
 class AmbiguousURL(URLError): pass
 class BadURL(URLError): pass
+
+class UrlRetrieveReportHook:
+
+	totalBlocks : int = None
+	reportFunction : Callable
+
+	def __init__(self, reportFunction : Callable) -> None:
+		self.reportFunction = reportFunction
+	
+	def __call__(self, block : int, blockSize : int, totalSize : int) -> None:
+		if self.totalBlocks is None:
+			self.totalBlocks = (totalSize // blockSize) + 1
+		
+		self.reportFunction(block / self.totalBlocks)
 
 class URL(str):
 	"""This class can be used for class-checking that a string is intended to be used as a URL. For subclasses of 
@@ -151,10 +166,40 @@ class URL(str):
 	def format(self : _T, *args : object, **kwargs : object) -> _T:
 		"""Return the URL but all {}-marked field replaced by the provided values. This method uses ``str.format``."""
 		return type(self)(super().format(*args, **kwargs))
-	
+	@overload
+	def retrieve(self, /, *, reportHook : Callable[[float|int|None],None]|None=None, outPath : Path=Path("."), tmpPath : Path|None=None) -> str: ...
+	@overload
+	def retrieve(self, /, *, reportHook : Callable[[float|int|None],None]|None=None, outPath : Path=Path("."), tmpPath : Path|None=None, debug : bool=False) -> tuple[str,Any]: ...
+	def retrieve(self, /, *, reportHook : Callable[[float|int|None],None]|None=None, outPath : Path=Path("."), tmpPath : Path|None=None, debug : bool=False):
+		
+		outPath = pathize(outPath)
+		if not outPath.writable:
+			raise PermissionError(f"Output path {outPath!r} is not writable.")
+		if tmpPath is not None:
+			tmpPath = pathize(tmpPath)
+			if tmpPath.writable:
+				tmpPath = tmpPath.writable
+			else:
+				raise PermissionError(f"Temporary path {tmpPath!r} is not writable.")
+
+		try:
+			(tmpPath, message) = ur.urlretrieve(self, filename=tmpPath.writable, reporthook=UrlRetrieveReportHook(reportHook))
+			tmpPath = pathize(tmpPath)
+		except Exception as e:
+			return None if not debug else (None, e)
+		
+		if tmpPath >> outPath:
+			return outPath if not debug else (outPath, message)
+		else:
+			return tmpPath if not debug else (tmpPath, message)
+
+	def ping(self):
+		return ping(self)
+
 	@property
 	def exists(self):
-		return ping(self) is not None
+		return self.ping() is not None
+	
 
 class URL_TEMPLATE(str):
 	"""Inherits behavior from `str` objects with format fields.

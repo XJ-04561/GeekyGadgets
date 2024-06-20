@@ -84,8 +84,11 @@ class Default(property):
 	fdel : Callable
 	deps : tuple
 
+	locks : "LockedDict[int,RLock]"
+
 	def __init__(self, fget=None, fset=None, fdel=None, doc=None, deps : tuple[str]=()):
 		super().__init__(fget, fset, fdel, doc)
+		from GeekyGadgets.Threads.Synch import LockedDict, RLock
 		if hasattr(self.fget, "__code__"):
 			self.fgetArgnames = self.fget.__code__.co_varnames[:self.fget.__code__.co_argcount+self.fget.__code__.co_kwonlyargcount]
 		elif hasattr(getattr(self.fget, "__func__", None), "__code__"):
@@ -94,6 +97,8 @@ class Default(property):
 			self.fgetArgnames = ()
 		if deps or not hasattr(self, "deps"):
 			self.deps = deps
+		if not hasattr(self, "locks"):
+			self.locks = LockedDict(factory=RLock)
 		
 	def __call__(self, fget=None, fset=None, fdel=None, doc=None):
 		self.__init__(fget, fset, fdel, doc=doc)
@@ -113,34 +118,37 @@ class Default(property):
 			owner.__annotations__[name] = self.fget.__annotations__["return"]
 
 	def __get__(self, instance, owner=None):
-		from GeekyGadgets.Functions import forceHash, getAttrChain
-		if instance is None:
-			return self
-		elif self.name in getattr(instance, "__dict__", ()):
-			return instance.__dict__[self.name]
-		
-		values = tuple(getAttrChain(instance, dep) for dep in self.deps)
-		currentHash = forceHash(values)
-		
-		if hasattr(instance, "__dict__") and instance.__dict__.get(f"_default_{self.name}", (currentHash+1,))[0] == currentHash:
-			return instance.__dict__[f"_default_{self.name}"][1]
-		else:
-			ret = self.fget(instance)
-			instance.__dict__[f"_default_{self.name}"] = (currentHash, ret)
-			return ret
+		with self.locks[id(self)]:
+			from GeekyGadgets.Functions import forceHash, getAttrChain
+			if instance is None:
+				return self
+			elif self.name in getattr(instance, "__dict__", ()):
+				return instance.__dict__[self.name]
+			
+			values = tuple(getAttrChain(instance, dep) for dep in self.deps)
+			currentHash = forceHash(values)
+			
+			if hasattr(instance, "__dict__") and instance.__dict__.get(f"_default_{self.name}", (currentHash+1,))[0] == currentHash:
+				return instance.__dict__[f"_default_{self.name}"][1]
+			else:
+				ret = self.fget(instance)
+				instance.__dict__[f"_default_{self.name}"] = (currentHash, ret)
+				return ret
 	
 	def __set__(self, instance, value):
-		instance.__dict__[self.name] = value
-		if self.fset:
-			self.fset(instance, value)
+		with self.locks[id(self)]:
+			instance.__dict__[self.name] = value
+			if self.fset:
+				self.fset(instance, value)
 	
 	def __delete__(self, instance):
-		if self.fdel:
-			self.fdel(instance)
-		if self.name in getattr(instance, "__dict__", ()):
-			del instance.__dict__[self.name]
-		if f"_default_{self.name}" in getattr(instance, "__dict__", ()):
-			del instance.__dict__[f"_default_{self.name}"]
+		with self.locks[id(self)]:
+			if self.fdel:
+				self.fdel(instance)
+			if self.name in getattr(instance, "__dict__", ()):
+				del instance.__dict__[self.name]
+			if f"_default_{self.name}" in getattr(instance, "__dict__", ()):
+				del instance.__dict__[f"_default_{self.name}"]
 
 class ClassProperty:
 	"""Similar to `builtins.property` but will generate the callback-returned value when accessed through the class 
@@ -265,34 +273,55 @@ class CachedClassProperty:
 	def __repr__(self):
 		return f"{object.__repr__(self)[:-1]} name={self.name!r}>"
 
-try:
-	from GeekyGadgets.Threads import Thread, ThreadGroup, Future
-except ImportError:
-	pass
+def threaded(func : function, groupCls : "type[ThreadGroup]"=None):
 
-def threaded(func, threadGroup : type["ThreadGroup"]=ThreadGroup):
-	"""Creates a wrapper function for `func` that instead starts `func` in another `Thread` object, and returns the 
-	`Future` of that created `Thread` object. If wrapper is called as a method, the threads will all belong to a 
-	collective but instance unique `ThreadGroup` object, or another threadgroup implementation specified by the 
-	keyword argument `threadGroup`. If function is not called as a method, all the threads will be added to a common 
-	threadgroup that does not contain any instance unique threads."""
-	groups = {}
-	groups[0] = threadGroup()
+	from GeekyGadgets.Threads.Groups import ThreadGroup
+	from GeekyGadgets.Threads.Thread import Thread, Future
+	groupCls = groupCls or ThreadGroup
 	if "." in func.__qualname__:
 		ownerName = func.__qualname__.split(".")[-2]
 	else:
 		ownerName = None
+
+	beforeAndAfter = [
+		lambda *args, **kwargs:None,
+		lambda *args, **kwargs:None
+	]
+	@staticmethod
+	def before(*args, **kwargs):
+		beforeAndAfter[0](*args, **kwargs)
+	@staticmethod
+	def after(*args, **kwargs):
+		beforeAndAfter[1](*args, **kwargs)
+	
+	@wraps(func)
 	def _thread_launcher_wrapper(*args, **kwargs):
-		if args and type(args[0]).__name__.split(".")[-1] == ownerName:
-			group = groups.get(id(args[0]))
-			if group is None:
-				groups[id(args[0])] = group = threadGroup()
-		else:
-			group = groups[0]
-		print(groups)
-		t = Thread(target=func, args=args, kwargs=kwargs, group=group)
+		t = Thread(
+			pre=before,
+			target=func,
+			post=after,
+			args=args,
+			kwargs=kwargs,
+			group=(
+				groupCls(name=id(args[0]))
+				if args and type(args[0]).__qualname__.split(".")[-1] == ownerName
+				else None
+			)
+		)
 		t.start()
 		return t.future
+	
 	update_wrapper(_thread_launcher_wrapper, func)
 	_thread_launcher_wrapper.__annotations__["return"] = Future
+	
+	_thread_launcher_wrapper.before = partial(beforeAndAfter.__setitem__, 0)
+	_thread_launcher_wrapper.after = partial(beforeAndAfter.__setitem__, 1)
+	
 	return _thread_launcher_wrapper
+
+try:
+	from GeekyGadgets.Threads.Synch import LockedDict, RLock
+	from GeekyGadgets.Threads.Thread import Thread, Future
+	from GeekyGadgets.Threads.Groups import ThreadGroup
+except ImportError:
+	pass

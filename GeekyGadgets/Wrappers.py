@@ -34,6 +34,7 @@ class Function(ABC, metaclass=FunctionMeta):
 	def __init__(self : "Function|Method", func : function|method):
 		self.__func__ = func
 		update_wrapper(self, func)
+		update_wrapper(self.__call__, func)
 
 	def __call__(self, *args, **kwargs):
 		return self.__func__(*args, **kwargs)

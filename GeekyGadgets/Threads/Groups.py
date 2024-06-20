@@ -1,47 +1,71 @@
 
 from GeekyGadgets.Threads.Globals import *
-from GeekyGadgets.Threads.Thread import *
+import GeekyGadgets.Classy as Classy
 
 __all__ = ("ThreadGroup",)
 
 class ThreadGroup:
-	
-	_dict : dict[str,"Thread"]
 
-	writeLock : RLock
-	names : list[str]
+	GROUPS : "LockedDict"
 
-	def __init__(self, iterable : Iterable["Thread"]|Iterator["Thread"]=[]):
-		self.writeLock = RLock()
-		with self.writeLock:
-			self._dict = {thread.name:thread for thread in iterable}
-			for thread in self._dict.values():
-				thread.group = self
-		from GeekyGadgets.Threads.Thread import Thread
+	name : Hashable
+	threads : "LockedDict[Hashable,Thread]" = cached_property(lambda self: LockedDict())
+	names : tuple[Hashable]
 
-		if not all(isinstance(t, Thread) for t in self):
-			offenders = list(repr(t) for t in self if not isinstance(t, Thread))
-			if len(offenders) == 1:
-				raise TypeError(f"Item {offenders[0]} is not an instance of {Thread}")
+	def __new__(cls, threads : Iterable["Thread"]=(), name : Hashable=None):
+		with cls.GROUPS.LOCK:
+			if name is None:
+				i = 1
+				while (name := f"UNNAMED GROUP {i}") in cls.GROUPS:
+					i += 1
+			if name in cls.GROUPS:
+				return cls.GROUPS[name]
 			else:
-				raise TypeError(f"Items {', '.join(offenders)} are not instances of {Thread}")
+				cls.GROUPS[name] = ret = super().__new__(cls)
+				return ret
 
-	def __iter__(self):
-		for thread in self._dict.values():
+	def __init__(self, threads : Iterable["Thread"]=(), name : Hashable=None):
+		
+		if name is not None:
+			self.name = name
+
+		for thread in threads:
+			self.add(thread)
+	
+	def __init_subclass__(cls, *args, **kwargs):
+		cls.GROUPS = LockedDict()
+		return super().__init_subclass__(*args, **kwargs)
+
+	def __iter__(self) -> "Generator[Thread,None,None]":
+		for thread in self.threads.values():
 			yield thread
 
 	def __getitem__(self, key : int|str) -> "Thread":
-		return self._dict[self.names[key]] if isinstance(key, int) else self._dict[key]
+		return self.threads[self.names[key]] if isinstance(key, int) else self.threads[key]
 	
+	@Classy.Default
+	def name(self):
+		for name, value in self.GROUPS.items():
+			if self is value:
+				return name
+		else:
+			raise ValueError(f"Group {self} is unnamed, it should be given a name when created.")
+
 	@property
-	def names(self) -> list[str]:
-		return list(self._dict.keys())
+	def names(self) -> tuple[str]:
+		return self.threads.keys()
 
 	def add(self, thread : "Thread") -> int:
-		with self.writeLock:
-			self._dict[thread.name] = thread
+		if thread.group is not self:
+			thread.group = self
+		self.threads[thread.name] = thread
 		return len(self.names)
 	
+	def prune(self):
+		for thread in self:
+			if not thread.alive:
+				self.threads.pop(thread.name, None)
+
 	@overload
 	def __or__(self, other : "ThreadGroup") -> "ThreadGroup": ...
 	@overload
@@ -91,3 +115,11 @@ class ThreadGroup:
 		"""`tuple` of the threads' return-values, where the values of threads who have yet to 
 		return are replaced with `None`."""
 		return tuple(t.future.call() if t.future.ready else None for t in self)
+
+try:
+	
+	from GeekyGadgets.Threads.Synch import LockedDict, RLock
+	from GeekyGadgets.Threads.Thread import *
+	ThreadGroup.GROUPS = LockedDict()
+except ImportError:
+	pass

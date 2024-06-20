@@ -28,6 +28,9 @@ class Reporter:
 		else:
 			raise ValueError(f"Name of progress report is not set and was not provided through report call.")
 
+	def progressHook(self, name : str) -> partial:
+		return partial(self.Progress, name=name)
+
 	@overload
 	def Progress(self, progress : float): ...
 	@overload

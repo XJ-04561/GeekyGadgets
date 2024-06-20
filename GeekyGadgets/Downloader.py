@@ -1,74 +1,74 @@
 
 from GeekyGadgets.Globals import *
-from GeekyGadgets.URL import URL
-from GeekyGadgets.Threads import MultiTasker, taskMethod
+from GeekyGadgets.URL import URL_TEMPLATE, URL, HTTP, HTTPS, FTP, ping
+from GeekyGadgets.Threads import MultiTasker, threadTask
 from GeekyGadgets.Hooks import Hooks, GlobalHooks, ProgressHook
-from GeekyGadgets.Paths import Path
+from GeekyGadgets.Paths import Path, pathize
+from GeekyGadgets.Classy import Default
 from urllib.request import urlretrieve, HTTPError
 from GeekyGadgets.This import this
 
-class ReportHook:
-
-	totalBlocks : int = None
-	reportFunction : Callable
-	name : str
-
-	def __init__(self, reportFunction : Callable, name : str):
-		self.reportFunction = reportFunction
-		self.name = name
-	
-	def __call__(self, block, blockSize, totalSize):
-		if self.totalBlocks is None:
-			self.totalBlocks = (totalSize // blockSize) + 1
-		
-		self.reportFunction(block / self.totalBlocks, self.name)
+class DownloadFailed(Exception):
+	@overload
+	def __init__(self, name : str, links : Iterable[URL]): ...
+	@overload
+	def __init__(self, name : str, links : Iterable[tuple[str,URL]]): ...
+	def __init__(self, name : str, links : Iterable[URL|tuple[str,URL]]):
+		nt = "\n\t"
+		f"{name!r} not found.\nSources tried:\n{nt.join(map(lambda x:x if isinstance(x, str) else x[0]+' = '+x[1], links))}"
 
 class Downloader(MultiTasker):
 
-	SOURCES : tuple[tuple[str, URL]] = ()
+	SOURCES : tuple[tuple[str, URL]] = Default(lambda self: tuple(), lambda self, value: SET__DICT__("SOURCES", tuple((name, URL_TEMPLATE(value)) for name, value in self.SOURCES)))
 
+	postProcessFunc : Callable[[Path],Path]
 	directory : Path
-	postProcess : Callable=None
 	hooks : Hooks
 
 
 	def __init__(self, *, directory : Path=Path("."), hooks: Hooks=GlobalHooks):
 		self.directory = directory
 		super().__init__(hooks=hooks)
+	
+	def __init_subclass__(cls, *args, **kwargs) -> None:
+		cls.SOURCES = tuple((name, URL_TEMPLATE(value)) for name, value in cls.SOURCES)
+		return super().__init_subclass__(*args, **kwargs)
 
 	def addSources(self, *sources : str):
 		self.SOURCES = self.SOURCES + sources
+	
+	def postProcess(self, name : str, filepath : str, link : URL) -> Path:
+		try:
+			return self.postProcessFunc(filepath)
+		except Exception as e:
+			e.add_note(f"This occurred while processing {filepath} downloaded from {link}")
+			self.LOG.exception(e)
 
-	@taskMethod
-	def download(self, name : str, query : str|tuple[str], filename : str=None) -> None:
+	@overload
+	def download(self, filename : str|Path, query : str|tuple[str]) -> None: ...
+	@overload
+	def download(self, filename : str|Path, query : str|tuple[str], directory : str|Path) -> None: ...
+	@threadTask
+	def download(self, filename : str|Path, query : str|tuple[str], directory : str|Path=None) -> None:
 		
-		reportHook = ReportHook(self.reporter.Progress)
-		outFile = "N/A"
-		for sourceName, sourceLink in self.SOURCES:
-			try:
-				link = sourceLink.format(query=query)
-				tempFilename = link.rsplit("/")[-1]
-				(outFile, msg) = urlretrieve(link, filename=self.directory / tempFilename, reporthook=reportHook) # Throws error if 404
+		filename = pathize(filename)
+		directory = pathize(directory or self.directory)
+		
+		links  = tuple((sourceName, sourceLink.format(query=query)) for sourceName, sourceLink in self.SOURCES)
+		for sourceName, link in links:
+			if not link.exists:
+				continue
+				
+			outName = link.retrieve(reportHook=self.reporter.progressHook(filename), outPath=directory / filename)
 
-				if filename is None:
-					filename = tempFilename
-
-				if self.postProcess is not None:
-					self.reporter.PostProcess(name)
-					try:
-						self.postProcess(self.directory / tempFilename, self.directory / filename)
-					except Exception as e:
-						e.add_note(f"This occurred while processing {outFile} downloaded from {sourceLink.format(query=query)}")
-						self.LOG.exception(e)
-						raise e
-				elif self.directory / tempFilename != (self.directory / filename):
-					os.rename(self.directory / tempFilename, self.directory / filename)
-				self.reporter.Finished(name)
-				return self.directory / filename, sourceName
-			except HTTPError as e:
-				self.LOG.info(f"Couldn't download from source={sourceName}, url: {sourceLink.format(query=query)}, due to {e.args}")
-			except Exception as e:
-				self.LOG.exception(e)
-				raise e
-		self.LOG.error(f"No database named {filename!r} found online. Sources tried: {', '.join(map(*this[0] + ': ' + this[1], self.SOURCES))}")
-		raise e
+			if outName is None:
+				self.reporter.Starting(filename)
+				continue
+			
+			outName = self.postProcess(filename, outName, link)
+			if outName and outName.exists:
+				return outName
+		else:
+			exc = DownloadFailed(filename, self.SOURCES)
+			self.LOG.exception(exc)
+			raise exc

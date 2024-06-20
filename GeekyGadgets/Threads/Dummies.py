@@ -1,20 +1,17 @@
 
 from GeekyGadgets.Threads.Globals import *
-from GeekyGadgets.Threads.Thread import *
-from GeekyGadgets.Threads.Groups import *
 
 __all__ = ("DummyThread", "DummyLock")
 
 class DummyThread:
 
-	group : ThreadGroup
-	future : Future
+	group : "ThreadGroup"
+	future : "Future"
 	pre : Callable
 	target : Callable
 	post : Callable
-	"""An object to access the """
 
-	def __init__(self, *, group: ThreadGroup | None = None, pre: Callable[[Any], object] | None = None, target: Callable[[Any], object] | None = None, post: Callable[[Any], object] | None = None, name: str | None = None, args: Iterable[Any] = [], kwargs: Mapping[str, Any] | None = None, daemon: bool | None = None) -> None:
+	def __init__(self, *, group: "ThreadGroup | None" = None, pre: Callable[[Any], object] | None = None, target: Callable[[Any], object] | None = None, post: Callable[[Any], object] | None = None, name: str | None = None, args: Iterable[Any] = [], kwargs: Mapping[str, Any] | None = None, daemon: bool | None = None) -> None:
 		self.target=target
 		self.name=name
 		self.args=args
@@ -45,3 +42,9 @@ class DummyLock:
 	@property
 	def locked(self):
 		return False
+
+try:
+	from GeekyGadgets.Threads.Thread import *
+	from GeekyGadgets.Threads.Groups import *
+except ImportError:
+	pass

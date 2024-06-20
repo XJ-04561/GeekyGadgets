@@ -8,25 +8,34 @@ from GeekyGadgets.Threads.Thread import Thread, Future
 from GeekyGadgets.Threads.Groups import ThreadGroup
 from GeekyGadgets.Threads.Meta import ThreadsMeta
 
-__all__ = ("MultiTasker", "taskMethod")
+__all__ = ("MultiTasker", "task", "threadTask")
 
-def taskMethod(func):
+def runTask(self : "MultiTasker", name : str, func : function, /, *args, **kwargs):
+	try:
+		while not self.advisor.isComplete(name):
+			if self.advisor.request(name):
+				func(*args, **kwargs)
+				self.reporter.Finished()
+				break
+			self.reporter.Progress(self.advisor.askProgress(name), name)
+			time.sleep(0.25)
+		else:
+			self.reporter.Skipped()
+	except:
+		self.reporter.Failed()
+		raise
+
+def task(func : function):
+
 	@wraps(func)
-	def _task_wrapper(self : MultiTasker, name : str, *args, **kwargs):
+	def _taskWrapper(self : MultiTasker, name : str, /, *args, **kwargs):
 		self.workers.add(ThreadsMeta.currentThread)
-		try:
-			while not self.advisor.isComplete(name):
-				if self.advisor.request(name):
-					func(*args, **kwargs)
-					self.reporter.Finished()
-					break
-				self.reporter.Progress(self.advisor.askProgress(name))
-				time.sleep(0.25)
-			else:
-				self.reporter.Skipped()
-		except:
-			self.reporter.Failed()
-	return threaded(_task_wrapper)
+		runTask(self, name, func, *args, **kwargs)
+	
+	return _taskWrapper
+
+def threadTask(func : function):
+	return threaded(task(func))
 
 class MultiTasker(Logged):
 	

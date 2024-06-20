@@ -1,15 +1,47 @@
 
+from GeekyGadgets.Globals import *
 
+class Pathy(ABC):
+	writable : "Path|None"
+	readable : "Path|None"
+	executable : "Path|None"
+	fullPerms : "Path|None"
+
+	directory : "Path|PathGroup"
+	filename : "Path|PathGroup"
+
+	@abstractmethod
+	def find(self, name : "Path|str", purpose : str="r") -> "Path|None": ...
+	def __rshift__(self, right : "Path") -> bool:
+		if not isinstance(right, Pathy):
+			right = Path(right)
+		if not right.writable:
+			return False
+		if not self.writable:
+			return False
+
+		os.rename(self.writable, out := right.writable)
+		return os.path.exists(out)
+	
+	def __lshift__(self, right : "Path") -> bool:
+		if not isinstance(right, Pathy):
+			right = Path(right)
+		if not right.writable:
+			return False
+		if not self.writable:
+			return False
+
+		os.rename(right.writable, out := self.writable)
+		return os.path.exists(out)
 
 try:
 	from PseudoPathy import *
+	Pathy.register(Path)
+	Pathy.register(PathGroup)
+	Pathy.register(PathList)
 except ModuleNotFoundError:
-	import os
-	from typing import Iterable
 	# Not meant to be used! Please install PseudoPathy instead.
 	# https://www.GitHub.com/XJ-04561/PseudoPathy
-
-	class Pathy: pass
 
 	class Path(str, Pathy):
 		def __truediv__(self, other):
@@ -42,3 +74,16 @@ except ModuleNotFoundError:
 			return type(self)(tuple(other / x for x in self._roots))
 	class DirectoryGroup(PathGroup): pass
 	class FileGroup(PathGroup): pass
+
+_T = TypeVar("_T")
+
+@overload
+def pathize(string : str) -> Path: ...
+@overload
+def pathize(string : _T) -> _T: ...
+def pathize(string : _T) -> _T:
+	if isinstance(string, Pathy):
+		return string
+	else:
+		return Path(string)
+
