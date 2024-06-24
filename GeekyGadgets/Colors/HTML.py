@@ -1,12 +1,12 @@
 
 from GeekyGadgets.Globals import *
-from GeekyGadgets.TagDown import Tag
+from GeekyGadgets.Semantics.Markup.HTML import Span, HTML
 
-class ColoredHTML(Tag):
+class ColoredHTML(Span):
 	
 	@overload
-	def __init__(self, *content: str | Tag, color : str, background : str, fontStyle : str, **cssAttributes) -> None: ...
-	def __init__(self, *content: str | Tag, **cssAttributes) -> None:
+	def __init__(self, *content: AnyStr | HTML, color : str, background : str, fontStyle : str, **cssAttributes) -> None: ...
+	def __init__(self, *content: AnyStr | HTML, **cssAttributes) -> None:
 		super().__init__("span", *content, style=cssAttributes)
 
 class TextColor(ColoredHTML):
@@ -14,8 +14,8 @@ class TextColor(ColoredHTML):
 	color : str
 
 	@overload
-	def __init__(self, *content: str | Tag, background : str, fontStyle : str, **attributes) -> None: ...
-	def __init__(self, *content: str | Tag, **attributes) -> None:
+	def __init__(self, *content: AnyStr | HTML, background : str, fontStyle : str, **attributes) -> None: ...
+	def __init__(self, *content: AnyStr | HTML, **attributes) -> None:
 		super().__init__(*content, color=self.color, **attributes)
 
 class BackgroundColor(ColoredHTML):
@@ -23,8 +23,8 @@ class BackgroundColor(ColoredHTML):
 	background : str
 
 	@overload
-	def __init__(self, *content: str | Tag, color : str, fontStyle : str, **attributes) -> None: ...
-	def __init__(self, *content: str | Tag, **attributes) -> None:
+	def __init__(self, *content: AnyStr | HTML, color : str, fontStyle : str, **attributes) -> None: ...
+	def __init__(self, *content: AnyStr | HTML, **attributes) -> None:
 		super().__init__(*content, background=self.background, **attributes)
 
 class FontStyle(ColoredHTML):
@@ -32,8 +32,8 @@ class FontStyle(ColoredHTML):
 	fontStyle : str
 
 	@overload
-	def __init__(self, *content: str | Tag, color : str, background : str, **attributes) -> None: ...
-	def __init__(self, *content: str | Tag, **attributes) -> None:
+	def __init__(self, *content: AnyStr | HTML, color : str, background : str, **attributes) -> None: ...
+	def __init__(self, *content: AnyStr | HTML, **attributes) -> None:
 		super().__init__(*content, fontStyle=self.fontStyle, **attributes)
 
 class RedText(TextColor):		color="Red"

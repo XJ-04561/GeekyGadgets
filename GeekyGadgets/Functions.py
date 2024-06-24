@@ -6,10 +6,12 @@ _NOT_SET = object()
 __all__ = ("first", "forceHash", "getAttrChain", "getReadyAttr", "hasReadyAttr", "isThing", "isType")
 _T = TypeVar("_T")
 
-def first(iterator):
-	for item in iterator:
-		return item
-	return None
+def first(iterable):
+	return next(iter(iterable), None)
+def last(iterable):
+	for x in iterable:
+		pass
+	return x
 
 _N = TypeVar("_N")
 _O = TypeVar("_O")

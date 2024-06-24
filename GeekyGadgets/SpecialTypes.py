@@ -11,6 +11,8 @@ __all__ = ("LimitedDict",)
 _NOT_SET = object()
 _DEFAULT_LIMIT = 10000
 _T = TypeVar("_T")
+_F = TypeVar("_F")
+_S = TypeVar("_S")
 
 def useLock(func : Callable):
 	def _func_wrapper(self, *args, **kwargs):
@@ -38,6 +40,14 @@ def postShave(func : Callable):
 	update_wrapper(_func_wrapper, func)
 	_func_wrapper.shaves = True
 	return _func_wrapper
+
+class Pair(tuple):
+	def __new__(cls, iterable: Iterable[_F,_S] = ...) -> "Pair[_F,_S]":
+		iterable = tuple(iterable)
+		if len(iterable) == 2:
+			return super().__new__(iterable)
+		else:
+			raise ValueError(f"`Pair` can only be created from an iterable 2 values in length. Not {len(iterable)} values.")
 
 class Freezer:
 
@@ -72,16 +82,18 @@ class Spaces(ABC):
 	@abstractmethod
 	def __setitem__(self, key: str, value: Any):
 		return super().__setitem__(key, value)
+	
+	def __iter__(self : "_D[_V]") -> "Generator[tuple[str,_V]]":
+		for name, value in dict.items(self):
+			yield (name, value)
+
+_V = TypeVar("_V")
+_D = TypeVar("_D", bound=Spaces)
 
 class LinkedSpace(Spaces):
 
-	@overload
-	def __init__(self, source : object=None, /): ...
-	@overload
-	def __init__(self, source : object, name : str=None, /): ...
-	def __init__(self, source : object, name : str=None, /):
+	def __init__(self, source : object, /):
 		SETATTR(self, "__source__", source)
-		SETATTR(self, "__name__", name if name is not None else hex(id(self)))
 	
 	def __getitem__(self, key):
 		return getattr(self, key)
@@ -97,36 +109,19 @@ class LinkedSpace(Spaces):
 	
 	def __setattr__(self, name: str, value : Any) -> None:
 		return setattr(GETATTR(self, "__source__"), name, value)
-	
-	def __repr__(self):
-		return f"NameSpace {GETATTR(self, '__name__')!r}"
 
 class NameSpace(dict, Spaces):
 
 	@overload
 	def __init__(self, /, **kwargs): ...
 	@overload
-	def __init__(self, iterable : Iterable[tuple[str,Any]]|dict, /, **kwargs): ...
-	@overload
-	def __init__(self, name : str, /, **kwargs): ...
-	@overload
-	def __init__(self, iterable : Iterable[tuple[str,Any]]|dict, name : str=None, /, **kwargs): ...
-	def __init__(self, first=None, second=None, /, **kwargs):
-		if first is None:
-			SETATTR(self, "__name__", hex(id(self)))
+	def __init__(self, iterable : Iterable[tuple[str,Any]]|dict|None, /, **kwargs): ...
+	def __init__(self, iterable : Iterable[tuple[str,Any]]|dict|None=None, /, **kwargs):
+		
+		if iterable is None:
 			super().__init__(**kwargs)
-		elif isinstance(first, str):
-			SETATTR(self, "__name__", first)
-			super().__init__(**kwargs)
-		elif isinstance(first, Iterable):
-			super().__init__(first, **kwargs)
-			SETATTR(self, "__name__", second if second is not None else hex(id(self)))
 		else:
-			TypeError(f"The first positional argument must be either a dict, an iterable, or a str. Not {type(first)}.")
-	
-	def __iter__(self):
-		for name, value in dict.items(self):
-			yield (name, value)
+			super().__init__(iterable, **kwargs)
 	
 	def __str__(self):
 		return " ".join(map("{0[0]}={0[1]!r}".format, self))
@@ -145,9 +140,6 @@ class NameSpace(dict, Spaces):
 	
 	def __setattr__(self, name: str, value : Any) -> None:
 		self[name] = value
-	
-	def __repr__(self):
-		return f"NameSpace {GETATTR(self, '__name__')!r}"
 
 class NullSpace(Spaces):
 
@@ -168,12 +160,14 @@ class HybridSpace(NameSpace, LinkedSpace):
 	__link_spaces__ : list[LinkedSpace]
 
 	@overload
-	def __init__(self, source : object, iterable : Iterable, /, **kwargs): ...
+	def __init__(self, /, **kwargs): ...
 	@overload
-	def __init__(self, source : object, iterable : Iterable, name : str, /, **kwargs): ...
-	def __init__(self, source : object, iterable=None, name=None, /, **kwargs):
-		SETATTR(self, "__link_spaces__", [LinkedSpace(self, source, name)])
-		NameSpace.__init__(self, iterable, name, **kwargs)
+	def __init__(self, source : object, /, **kwargs): ...
+	@overload
+	def __init__(self, source : object, iterable : Iterable, /, **kwargs): ...
+	def __init__(self, source : object=None, iterable=None, /, **kwargs):
+		SETATTR(self, "__link_spaces__", [LinkedSpace(self, source)] if source is not None else [])
+		NameSpace.__init__(self, iterable, **kwargs)
 
 	def __getitem__(self, key):
 		ret = dict.get(self, key, NULL)

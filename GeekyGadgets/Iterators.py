@@ -1,6 +1,7 @@
 
 from collections.abc import Iterable
 from GeekyGadgets.Globals import *
+from GeekyGadgets.Globals import Callable
 
 _E = TypeVar("_E")
 _NOT_SET = object()
@@ -181,9 +182,7 @@ class Grouper(Subscriptable):
 		currentKey = self.keys.pop()
 		
 		return tuple(filter(lambda x:self.key(x) == currentKey, self.iterable))
-			
-			
-		
+
 
 class Walker(Iterator):
 	"""Iterator that iterates in-order through an iterable and down through all their iterable elements. Going all the
@@ -191,18 +190,18 @@ class Walker(Iterator):
 	
 	_iterator : Iterator[_E]
 
-	def __init__(self, iterable : Iterable):
-		self._iterator = self.recursiveWalk(iterable)
+	def __init__(self, iterable : Iterable, key : Callable=iter):
+		self._iterator = self.recursiveWalk(iterable, key=key)
 	
 	def __next__(self) -> _E:
 		return next(self._iterator)
 	
 	@classmethod
-	def recursiveWalk(cls, iterable) -> Generator[_E, None, None]:
+	def recursiveWalk(cls, iterable, key : Callable=iter) -> Generator[_E, None, None]:
 		for item in iterable:
 			yield item
 			if isinstance(item, Iterable):
-				yield from cls.recursiveWalk(item)
+				yield from cls.recursiveWalk(key(item))
 
 class LeavesWalker(Walker):
 	"""Iterator that iterates in-order through an iterable and down through all their iterable elements. Going all the
@@ -236,6 +235,54 @@ class BranchesWalker(Walker):
 		else:
 			raise StopIteration(f"{self} came to a stop.")
 
+class GraphWalker(Walker):
+	@classmethod
+	def recursiveWalk(cls, iterable, key : Callable=None, history : set=None) -> Generator[Any,None,None]:
+		from GeekyGadgets.Illustrative.NodesAndGraphs import Node, Edge, Graph
+		if history is None:
+			history = set()
+		if isinstance(iterable, Graph):
+			yield from cls.recursiveWalk(iterable.root, history=history)
+		else:
+			for obj in iterable.connections:
+				history.add(obj)
+				yield obj
+				yield from cls.recursiveWalk(obj, history=history)
+
+class NodeWalker(Walker):
+	"""Iterator that iterates in-order through an iterable and down through all their iterable elements. Going all the 
+	way down through an element before progressing to the next element.
+	
+	But, only yields the elements which are themselves iterable, and not their non-iterable elements.
+	"""
+	
+	_iterator : Iterator[_E]
+
+	def __next__(self) -> _E:
+		from GeekyGadgets.Illustrative.NodesAndGraphs import Node
+		for item in self._iterator:
+			if isinstance(item, Node):
+				return item
+		else:
+			raise StopIteration(f"{self} came to a stop.")
+
+class EdgeWalker(Walker):
+	"""Iterator that iterates in-order through an iterable and down through all their iterable elements. Going all the 
+	way down through an element before progressing to the next element.
+	
+	But, only yields the elements which are themselves iterable, and not their non-iterable elements.
+	"""
+	
+	_iterator : Iterator[_E]
+
+	def __next__(self) -> _E:
+		from GeekyGadgets.Illustrative.NodesAndGraphs import Edge
+		for item in self._iterator:
+			if isinstance(item, Edge):
+				return item
+		else:
+			raise StopIteration(f"{self} came to a stop.")
+
 #
 #	Relevant to Configs.py
 #
@@ -258,11 +305,11 @@ class ConfigWalker(Walker):
 	_iterator : Config[str,Any]
 
 	@classmethod
-	def recursiveWalk(cls, iterable : Config, root : str=None) -> Generator[tuple[str,str,ConfigCategory|Any],None,None]:
+	def recursiveWalk(cls, iterable : Config, root : str=None, key : Callable=iter) -> Generator[tuple[str,str,ConfigCategory|Any],None,None]:
 		for name, value in iterable.items():
 			yield (root, name, value)
 			if isinstance(value, ConfigCategory):
-				yield from cls.recursiveWalk(value, root=f"{root}.{name}" if root is not None else name)
+				yield from cls.recursiveWalk(value, root=f"{root}.{name}" if root is not None else name, key=key)
 	
 	@property
 	def categories(self) -> Generator[tuple[str,str,ConfigCategory],None,None]:
