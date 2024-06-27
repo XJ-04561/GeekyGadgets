@@ -4,7 +4,7 @@ from GeekyGadgets.SpecialTypes import NameSpace
 from GeekyGadgets.Formatting.Case import KebabCase, SnakeCase, PascalCase
 from GeekyGadgets.Functions import last
 from GeekyGadgets.Classy import Default
-from Threads import ThreadsMeta
+from GeekyGadgets.Threads import ThreadsMeta
 
 
 DEFAULT_CONTEXT = {
@@ -30,6 +30,9 @@ class SemanticsNameSpace(Semantics, NameSpace):
 			return f"{self.delimiters[0]}{self.sep.join(map(lambda x: f'{x[0]}{self.pairSep}{self.listSep.join(map(str, x[1])) if isinstance(x[1], (list,tuple)) else x[1]}', self))}{self.delimiters[1]}"
 		else:
 			return f"{self.delimiters[0]}{self.newline}{self.indentation}{f'{self.sep}{self.newline}{self.indentation}'.join(map(lambda x: f'{x[0]}{self.spacing}{self.pairSep}{self.spacing}{self.listSep.join(map(str, x[1])) if isinstance(x[1], (list,tuple)) else x[1]}', self))}{self.newline}{self.delimiters[1]}"
+
+	def __format__(self, fs):
+		return f"{self.delimiters[0]}{self.sep.join(map(lambda x: f'{x[0]}{self.pairSep}{self.listSep.join(map(str, x[1])) if isinstance(x[1], (list,tuple)) else x[1]}', self))}{self.delimiters[1]}"
 
 class Attributes(SemanticsNameSpace):
 	

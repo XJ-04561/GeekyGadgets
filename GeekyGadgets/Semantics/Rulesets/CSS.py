@@ -16,7 +16,7 @@ class CSS:
 
 class CascadingStyleSheet(Ruleset, CSS):
 	def __init__(self, selector : str, properties : "dict[str|type[CssProperty],str|Scalar|Function]") -> None:
-		self.update(properties)
+		dict.update(self, properties)
 		return super().__init__(properties)
 
 #

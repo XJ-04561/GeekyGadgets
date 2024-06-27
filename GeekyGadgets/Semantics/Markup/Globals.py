@@ -15,10 +15,10 @@ class Markup(ABC, Semantics):
 	attributes : dict[str,Any] = Default(lambda self:Attributes())
 
 	def __init__(self : "_TAG", _name : str, /, *content : "AnyStr|Markup", **attributes : AnyStr|int|float|bool) -> None:
-		from GeekyGadgets.Semantics.Rulesets import CSS
+		from GeekyGadgets.Semantics.Rulesets.CSS import CascadingStyleSheet
 		self._name = _name
 		self.content = list(content)
-		self.attributes.update({name:value if name != "style" else CSS(value) for name, value in attributes.items()})
+		dict.update(self.attributes, {name:value if name != "style" else CascadingStyleSheet("", value) for name, value in attributes.items()})
 
 	def __iter__(self : "Markup") -> "Generator[Markup|AnyStr,None,None]":
 		for element in self.content:
@@ -93,9 +93,9 @@ class Markup(ABC, Semantics):
 			self.content.remove(arg)
 	
 	@overload
-	def removeContent(self, child : "Markup", /): ...
+	def removeSibling(self, sibling : "Markup", /): ...
 	@overload
-	def removeContent(self, index : "int", /): ...
+	def removeSibling(self, index : "int", /): ...
 	def removeSibling(self, arg : "Markup", /):
 		if isinstance(arg, int):
 			self.parent.content.remove(self.siblings[arg])

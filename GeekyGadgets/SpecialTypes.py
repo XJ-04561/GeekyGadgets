@@ -45,7 +45,7 @@ class Pair(tuple):
 	def __new__(cls, iterable: Iterable[_F,_S] = ...) -> "Pair[_F,_S]":
 		iterable = tuple(iterable)
 		if len(iterable) == 2:
-			return super().__new__(iterable)
+			return super().__new__(cls, iterable)
 		else:
 			raise ValueError(f"`Pair` can only be created from an iterable 2 values in length. Not {len(iterable)} values.")
 
