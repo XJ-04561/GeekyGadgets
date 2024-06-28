@@ -12,21 +12,27 @@ class Markup(ABC, Semantics):
 	children : "tuple[Markup]" = Default["content"](lambda self: tuple(filter(lambda x:isinstance(x, Markup), self.content)))
 
 	content : "list[Markup|AnyStr]" = Default(lambda self:[])
-	attributes : dict[str,Any] = Default(lambda self:Attributes())
+	attributes : Attributes[str,Any] = Default(lambda self:Attributes())
 
 	def __init__(self : "_TAG", _name : str, /, *content : "AnyStr|Markup", **attributes : AnyStr|int|float|bool) -> None:
-		from GeekyGadgets.Semantics.Rulesets.CSS import CascadingStyleSheet
+		from GeekyGadgets.Semantics.Rulesets.CSS import AttributeCSS
 		self._name = _name
 		self.content = list(content)
-		dict.update(self.attributes, {name:value if name != "style" else CascadingStyleSheet("", value) for name, value in attributes.items()})
+		self.attributes = Attributes()
+		for name, value in attributes.items():
+			if name != "style":
+				self.attributes[name] = value
+			else:
+				self.attributes[name] = AttributeCSS(value)
 
 	def __iter__(self : "Markup") -> "Generator[Markup|AnyStr,None,None]":
 		for element in self.content:
 			yield element
 
 	def __str__(self : "Markup") -> str:
-		sep = f"\n{SyntaxContext.indentation}" if not SyntaxContext.compact else ""
-		return f"<{self._name} {self.attributes}>{''.join(map(lambda x: sep+str(x) if isinstance(x, Markup) else str(x), self))}{sep if isinstance(last(self), Markup) else ''}</{self.name}>"
+		n = f"\n{SyntaxContext.indentation}" if not SyntaxContext.compact else ""
+		indent = SyntaxContext.indentation if not SyntaxContext.compact else ""
+		return f"<{self._name} {self.attributes}>{''.join(map(lambda x: n+str(x).replace('<', indent+'<') if isinstance(x, Markup) else str(x), self))}{n if isinstance(last(self), Markup) else ''}</{self._name}>"
 	
 	def __repr__(self : "Markup") -> str:
 		return repr(str(self))
@@ -107,4 +113,9 @@ _TAG = TypeVar("_TAG", bound=Markup)
 
 class DeclaredTag(Markup):
 	def __init__(self: _TAG, /, *content: AnyStr | _TAG, **attributes: AnyStr | int | float | bool) -> None:
-		super().__init__(SnakeCase(self.__class__.__name__), *content, **attributes)
+		super().__init__(getattr(self, "_name", KebabCase(self.__class__.__name__)), *content, **attributes)
+	
+	def __init_subclass__(cls, name=None, **kwargs) -> None:
+		if name is not None:
+			cls._name = name
+		return super().__init_subclass__(**kwargs)

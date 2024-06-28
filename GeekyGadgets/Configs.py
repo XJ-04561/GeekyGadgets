@@ -308,10 +308,10 @@ def loadTOML(filename) -> Config[str,Any]: ...
 def loadTOML(filename, dictType : type[_D]=Config) -> _D: ...
 def loadTOML(filename, dictType=Config):
 	if PYTHON_VERSION < (3, 11):
-		return dictType(toml.load(f, _dict=dictType.CATEGORY_CLASS))
+		return dictType(toml.load(filename, _dict=dictType.CATEGORY_CLASS))
 	else:
 		with open(filename, "rb") as f:
-			return dictType.fromDict(toml.load(open(filename, "rb")))
+			return dictType.fromDict(toml.load(f))
 
 try:
 	from GeekyGadgets.Iterators import ConfigWalker

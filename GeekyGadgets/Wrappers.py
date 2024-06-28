@@ -5,7 +5,7 @@ from abc import ABC, ABCMeta
 
 class FunctionMeta(ABCMeta):
 
-	def __new__(mcls: type[Self], name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwargs: Any) -> Self:
+	def __new__(mcls: "type[FunctionMeta]", name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwargs: Any) -> "FunctionMeta":
 		"""Makes sure that the new classes have the same name as the function/method that is set through 
 		the `__base__` attribute."""
 		if "__base__" in namespace:

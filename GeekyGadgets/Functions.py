@@ -8,10 +8,14 @@ _T = TypeVar("_T")
 
 def first(iterable):
 	return next(iter(iterable), None)
-def last(iterable):
+def last(iterable, default=_NOT_SET, /):
+	x = _NOT_SET
 	for x in iterable:
 		pass
-	return x
+	if x is _NOT_SET:
+		return None
+	else:
+		return x
 
 _N = TypeVar("_N")
 _O = TypeVar("_O")

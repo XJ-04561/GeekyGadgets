@@ -35,18 +35,38 @@ Tree = NameSpace(
 @media (prefers-color-scheme: dark) {
 	.primary {
 		color : var(--DARK-PRIMARY-COLOR);
+		fill : var(--DARK-PRIMARY-COLOR);
 		background-color : var(--DARK-PRIMARY-BACKGROUND);
 		border-color : var(--DARK-PRIMARY-BORDER);
 	}
+	text.primary {
+		fill : var(--DARK-PRIMARY-COLOR);
+	}
+	circle.primary {
+		fill : var(--DARK-PRIMARY-BACKGROUND);
+	}
 	.secondary {
 		color : var(--DARK-SECONDARY-COLOR);
+		fill : var(--DARK-SECONDARY-COLOR);
 		background-color : var(--DARK-SECONDARY-BACKGROUND);
 		border-color : var(--DARK-SECONDARY-BORDER);
+	}
+	circle.secondary {
+		fill : var(--DARK-SECONDARY-BACKGROUND);
+	}
+	text.secondary {
+		fill : var(--DARK-SECONDARY-COLOR);
 	}
 	.tertiary {
 		color : var(--DARK-TERTIARY-COLOR);
 		background-color : var(--DARK-TERTIARY-BACKGROUND);
 		border-color : var(--DARK-TERTIARY-BORDER);
+	}
+	circle.tertiary {
+		fill : var(--DARK-TERTIARY-BACKGROUND);
+	}
+	text.tertiary {
+		fill : var(--DARK-TERTIARY-COLOR);
 	}
 }
 .primary:not(.primary .primary){
@@ -88,20 +108,20 @@ figure.TreeGraph {
 	display : flex;
 	justify-content : center;
 	flex-direction: row;
+	max-width : 100%;
+	max-height : 100%;
 }
-svg.TreeGraph {
-	aspect-ratio : 4 / 3;
-	margin : 2%;
+figure.TreeGraph > * {
+	margin-top : 2%;
+	margin-bottom : 2%;
+	max-height : 96%;
+}
+figure.TreeGraph > svg {
+	flex-grow: 3;
 }
 figure.TreeGraph > menu {
-	margin : 2%;
 	flex-grow : 1;
-	height : 96%;
+
 }
-svg.TreeGraph {
-	fill : none;
-	stroke-dasharray : 3, 3;
-	stroke : var(--DARK-PRIMARY-COLOR);
-	stroke-width : 2;
-}"""
+"""
 )))

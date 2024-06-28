@@ -1,6 +1,6 @@
 
 
-import GeekyGadgets.Semantics.Markup as _Globals
+from GeekyGadgets.Semantics.Markup import Globals as _Globals
 
 
 

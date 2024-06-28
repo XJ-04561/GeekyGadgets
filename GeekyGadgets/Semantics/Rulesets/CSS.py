@@ -17,7 +17,13 @@ class CSS:
 class CascadingStyleSheet(Ruleset, CSS):
 	def __init__(self, selector : str, properties : "dict[str|type[CssProperty],str|Scalar|Function]") -> None:
 		dict.update(self, properties)
-		return super().__init__(properties)
+
+class AttributeCSS(Ruleset, CSS):
+	
+	delimiters : tuple[str,str] = ClassProperty(lambda self: (SyntaxContext.stringDelimiter, SyntaxContext.stringDelimiter))
+
+	def __init__(self, properties : "dict[str|type[CssProperty],str|Scalar|Function]") -> None:
+		dict.update(self, properties)
 
 #
 #	UNITS

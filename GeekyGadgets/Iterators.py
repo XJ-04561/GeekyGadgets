@@ -7,16 +7,18 @@ _E = TypeVar("_E")
 _NOT_SET = object()
 
 if PYTHON_VERSION < (3, 12):
-	class Batched(Iterator):
+	class Batched:
 		def __init__(self, iterable, n):
-			self.iterable = iter(iterable) if hasattr(iterable, "__iter__") else iterable
+			self._iter = iter(iterable)
 			self.n = n
 		
 		def __iter__(self):
-			_iter = iter(self.iterable) if hasattr(self.iterable, "__iter__") else self.iterable
-			
-			while (ret := tuple(item for i, item in zip(range(self.n), _iter))):
-				yield ret
+			return self
+		
+		def __next__(self):
+			while (ret := tuple(item for i, item in zip(range(self.n), self._iter))):
+				return ret
+			raise StopIteration()
 else:
 	from itertools import batched as Batched
 
@@ -36,7 +38,7 @@ _E5 = TypeVar("_E5")
 _E6 = TypeVar("_E6")
 
 class Row(tuple):
-	def __new__(cls, iterable: Iterable = ()) -> Self:
+	def __new__(cls, iterable: Iterable = ()) -> "Row":
 		obj = super().__new__(cls, iterable)
 		obj._iterator = tuple.__iter__(obj)
 		return obj

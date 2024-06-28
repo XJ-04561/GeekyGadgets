@@ -122,8 +122,12 @@ class Thread(_Thread, Logged):
 			if self.post: self.post(*args, **kwargs)
 			self.future.resolve(value=ret)
 		except Exception as e:
-			logCopy = type(e)(*e.args)
-			logCopy.add_note(f"This exception occured in thread: {current_thread()}")
-			self.LOG.exception(type(e)(*e.args))
+			try:
+				logCopy = type(e)(*e.args)
+				if hasattr(e, "add_note"):
+					logCopy.add_note(f"This exception occured in thread: {current_thread()}")
+			except:
+				logCopy = e
+			self.LOG.exception(logCopy)
 			self.future.resolve(exception=e)
 

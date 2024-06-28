@@ -127,14 +127,16 @@ class Hooks(Logged):
 						try:
 							hook(eventInfo)
 						except Exception as e:
-							e.add_note(f"This occurred while calling the hook {hook!r} tied to {category=} with {eventInfo=}")
+							if hasattr(e, "add_note"):
+								e.add_note(f"This occurred while calling the hook {hook!r} tied to {category=} with {eventInfo=}")
 							self.LOG.exception(e)
 				else:
 					self.LOG.info(f"{category=} triggered, but no hooks registered in {self!r}")
 			except EmptyQueueException:
 				pass
 			except Exception as e:
-				e.add_note(f"This exception occurred in hooks thread '{getattr(current_thread(), 'name', 'N/A')}'")
+				if hasattr(e, "add_note"):
+					e.add_note(f"This exception occurred in hooks thread '{getattr(current_thread(), 'name', 'N/A')}'")
 				self.LOG.exception(e)
 		self.LOG.info(f"Hooks thread {getattr(current_thread(), 'name', 'N/A')} stopped running")
 

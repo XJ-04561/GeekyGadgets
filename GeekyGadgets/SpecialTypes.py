@@ -136,7 +136,10 @@ class NameSpace(dict, Spaces):
 		dict.__setitem__(self, key, value)
 	
 	def __getattribute__(self, name: str) -> Any:
-		return self[name]
+		if name.startswith("_"):
+			return object.__getattribute__(self, name)
+		else:
+			return self[name]
 	
 	def __setattr__(self, name: str, value : Any) -> None:
 		self[name] = value

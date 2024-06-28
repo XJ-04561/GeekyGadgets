@@ -13,6 +13,9 @@ ROOT_LOGGER = logging.getLogger()
 DEV_NULL = open(os.devnull, "w")
 DEV_NULL_BYTES = open(os.devnull, "wb")
 ISATTY = sys.stdout.isatty()
+BACKSLASH = "\\"
+NEWLINE = "\n"
+TABULATOR = "\t"
 
 class _NULL:
 	def __call__(self, *args, **kwargs): return NULL

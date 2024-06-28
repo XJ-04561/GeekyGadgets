@@ -1,8 +1,8 @@
 
 from GeekyGadgets.Globals import *
-from GeekyGadgets.Semantics.Markup.HTML import Span, HTML
+from GeekyGadgets.Semantics.Markup.HTML import Span, HTML, _Globals
 
-class ColoredHTML(Span):
+class ColoredHTML(_Globals.Markup):
 	
 	@overload
 	def __init__(self, *content: AnyStr | HTML, color : str, background : str, fontStyle : str, **cssAttributes) -> None: ...

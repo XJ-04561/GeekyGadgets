@@ -41,7 +41,8 @@ class Downloader(MultiTasker):
 		try:
 			return self.postProcessFunc(filepath)
 		except Exception as e:
-			e.add_note(f"This occurred while processing {filepath} downloaded from {link}")
+			if hasattr(e, "add_note"):
+				e.add_note(f"This occurred while processing {filepath} downloaded from {link}")
 			self.LOG.exception(e)
 
 	@overload
