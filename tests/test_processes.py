@@ -1,5 +1,6 @@
 
 from GeekyGadgets.Processes import *
+from GeekyGadgets.Paths import FilePath
 import sys, os
 from subprocess import Popen
 
@@ -32,8 +33,8 @@ def test_process_single():
 		assert command.exitcodes == returncodes
 		assert command.success == success
 	
-	assert open(os.path.join(".", "single_1", "python_success_1.out.log"), "r").read() == "success\n"
-	assert open(os.path.join(".", "single_2", "python_fail_1.out.log"), "r").read() == "fail\n"
+	assert open(os.path.join(".", "single_1", f"{FilePath(EXE).name}_success_1.out.log"), "r").read() == "success\n"
+	assert open(os.path.join(".", "single_2", f"{FilePath(EXE).name}_fail_1.out.log"), "r").read() == "fail\n"
 
 def test_process_logic():
 
@@ -64,17 +65,17 @@ def test_process_logic():
 		assert command.exitcodes == returncodes
 		assert command.success == success
 
-	assert open(os.path.join(".", "logic_1", "python_success_1.out.log"), "r").read() == "success\n"
-	assert not os.path.exists(os.path.join(".", "logic_1", "python_fail_2.out.log"))
+	assert open(os.path.join(".", "logic_1", f"{FilePath(EXE).name}_success_1.out.log"), "r").read() == "success\n"
+	assert not os.path.exists(os.path.join(".", "logic_1", f"{FilePath(EXE).name}_fail_2.out.log"))
 
-	assert open(os.path.join(".", "logic_2", "python_success_1.out.log"), "r").read() == "success\n"
-	assert open(os.path.join(".", "logic_2", "python_fail_2.out.log"), "r").read() == "fail\n"
+	assert open(os.path.join(".", "logic_2", f"{FilePath(EXE).name}_success_1.out.log"), "r").read() == "success\n"
+	assert open(os.path.join(".", "logic_2", f"{FilePath(EXE).name}_fail_2.out.log"), "r").read() == "fail\n"
 	
-	assert open(os.path.join(".", "logic_3", "python_fail_1.out.log"), "r").read() == "fail\n"
-	assert open(os.path.join(".", "logic_3", "python_success_2.out.log"), "r").read() == "success\n"
+	assert open(os.path.join(".", "logic_3", f"{FilePath(EXE).name}_fail_1.out.log"), "r").read() == "fail\n"
+	assert open(os.path.join(".", "logic_3", f"{FilePath(EXE).name}_success_2.out.log"), "r").read() == "success\n"
 	
-	assert open(os.path.join(".", "logic_4", "python_fail_1.out.log"), "r").read() == "fail\n"
-	assert not os.path.exists(os.path.join(".", "logic_4", "python_success_2.out.log"))
+	assert open(os.path.join(".", "logic_4", f"{FilePath(EXE).name}_fail_1.out.log"), "r").read() == "fail\n"
+	assert not os.path.exists(os.path.join(".", "logic_4", f"{FilePath(EXE).name}_success_2.out.log"))
 
 def test_process_pipe():
 
@@ -135,5 +136,5 @@ def test_process_capture_pipe():
 		assert command.exitcodes == returncodes
 		assert command.success == success
 
-	assert open(os.path.join(".", "capture_pipe_1", "python_startpipe_1.out.log"), "r").read() == "Start\n0\n1\n2\n3\n4\n5\n"
+	assert open(os.path.join(".", "capture_pipe_1", f"{FilePath(EXE).name}_startpipe_1.out.log"), "r").read() == "Start\n0\n1\n2\n3\n4\n5\n"
 	assert command.processes[0].OUT.read() == "Start\n0\n1\n2\n3\n4\n5\n"
