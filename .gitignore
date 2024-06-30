@@ -1,3 +1,7 @@
 __pycache__
 tests/test_*/*.txt
 tests/test_*/*.log
+tests/test_*/*.html
+tests/test_*/*/*.txt
+tests/test_*/*/*.log
+tests/test_*/*/*.html
