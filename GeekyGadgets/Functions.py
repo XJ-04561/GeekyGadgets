@@ -40,6 +40,23 @@ def forceHash(obj):
 	else:
 		return id(obj)
 
+_K = TypeVar("_K")
+_V = TypeVar("_V")
+_D = TypeVar("_D")
+@overload
+def getitem(d : Mapping[_K,_V], key : _K) -> _V: ...
+@overload
+def getitem(d : Mapping[_K,_V], key : _K, default : _D) -> _D|_V: ...
+def getitem(d, key, default=_NOT_SET):
+	if default is _NOT_SET:
+		return d[key]
+	else:
+		try:
+			return d[key]
+		except KeyError:
+			return default
+	
+
 @overload
 def getAttrChain(obj, key : str, /): ...
 @overload

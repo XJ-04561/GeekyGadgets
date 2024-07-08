@@ -24,9 +24,9 @@ else:
 
 from itertools import (
 	chain as Chain, takewhile as TakeWhile, dropwhile as DropWhile, zip_longest as ZipLongest,
-	repeat as Repeat)
+	repeat as Repeat, count as Count)
 
-__all__ = ("Alternate", "AlphaRange", "Batched", "BranchesWalker", "Chain", "ChainChain", "ConfigWalker",
+__all__ = ("Alternate", "AlphaRange", "Batched", "BranchesWalker", "Chain", "ChainChain", "ConfigWalker", "Count",
 		   "DropThenTakeWhile", "DropWhile", "Grouper", "LeavesWalker", "Repeat", "TakeWhile", "Walker", "ZipLongest")
 
 _E = TypeVar("_E")

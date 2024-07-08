@@ -1,8 +1,8 @@
 
 GEEKY_GADGETS_INIT = True
 
-from GeekyGadgets.URL import *
 import GeekyGadgets.TypeHinting as TypeHinting
+from GeekyGadgets.URL import *
 from GeekyGadgets.Threads import *
 from GeekyGadgets.SQL import *
 from GeekyGadgets.This import *
