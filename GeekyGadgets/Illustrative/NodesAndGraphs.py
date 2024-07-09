@@ -89,11 +89,13 @@ class Graph(ABC):
 
 		return graph
 
-	def illustrate(self, outputFormat : Literal["HTML","PDF","SVG","PNG","GraphML"], *, filename : str=None, encoding: str = "utf-8", nameProp=None, light : bool=True, dark : bool=False, **kwargs):
+	@overload
+	def illustrate(self, outputFormat : Literal["HTML","PDF","SVG","PNG","GraphML"], *, encoding: str = "utf-8", nameProp=None, light : bool=True, dark : bool=False, **kwargs) -> bytes: ...
+	@overload
+	def illustrate(self, outputFormat : Literal["HTML","PDF","SVG","PNG","GraphML"], *, file : BinaryIO, encoding: str = "utf-8", nameProp=None, light : bool=True, dark : bool=False, **kwargs) -> None: ...
+	def illustrate(self, outputFormat : Literal["HTML","PDF","SVG","PNG","GraphML"], *, file : BinaryIO=None, encoding: str = "utf-8", nameProp=None, light : bool=True, dark : bool=False, **kwargs) -> bytes|None:
 
 		import math
-		if filename is None:
-			filename = f"{self.name}.{outputFormat.lower()}"
 
 		generations = [[self.root]]
 		history = set()
@@ -137,7 +139,7 @@ class Graph(ABC):
 					fig := Figure(Class="TreeGraph primary").addChild(
 						svg := Svg(id=self.name, Class="TreeGraph primary", width=f"{WIDTH}", height=f"{HEIGHT}", xmlns="http://www.w3.org/2000/svg")
 					).addChild(
-						menu := Menu(Class="secondary")
+						menu := Menu(H1(self.name), Class="secondary")
 				))
 				menu.addChild(H1(self.name))
 				
@@ -256,8 +258,11 @@ class Graph(ABC):
 			case _:
 				raise ValueError(f"{outputFormat=} is not a recognized output format name. Recognized names: `HTML`, `PDF` ,`SVG` ,`PNG` ,`GraphML`")
 		
-		with open(filename, "wb") as outFile:
-			outFile.write(filedata if isinstance(filedata, bytes) else filedata.encode(encoding))
+		if file is not None:
+			file.write()
+			return file.flush()
+		else:
+			return filedata if isinstance(filedata, bytes) else filedata.encode(encoding)
 
 	@property
 	def size(self):
