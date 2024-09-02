@@ -1,8 +1,9 @@
 
-from GeekyGadgets.Globals import *
+import GeekyGadgets.Globals as _Globals
 
-if PYTHON_VERSION < (3, 12):
-	from GeekyGadgets.Iterators import Batched
+if _Globals.PYTHON_VERSION < (3, 12):
 	import itertools
-	itertools.batched = Batched
+	import GeekyGadgets.Iterators
+	itertools.batched = GeekyGadgets.Iterators.Batched
+
 

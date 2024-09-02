@@ -1,23 +1,23 @@
 
 from GeekyGadgets.Globals import *
-from GeekyGadgets.Hooks import Hooks, GlobalHooks, HookedDict
-from GeekyGadgets.Threads import *
-from GeekyGadgets.Iterators import Batched, Alternate, Repeat
+
+import GeekyGadgets.Logging as _Logging
+import GeekyGadgets.Threads as _Threads
+import GeekyGadgets.Iterators as _Iterators
+import GeekyGadgets.Classy as _Classy
+import GeekyGadgets.Formatting as _Formatting
+import GeekyGadgets.Colors.ANSI as _ANSI
+import GeekyGadgets.IO as _IO
+
 from GeekyGadgets.This import this
-from GeekyGadgets.Logging import Logged
-from GeekyGadgets.Classy import Default
-from GeekyGadgets.Formatting import timeFormat
-from GeekyGadgets.Colors.ANSI import *
-from GeekyGadgets.IO import RePrinter
+from GeekyGadgets.Hooks import Hooks, GlobalHooks, HookedDict
 
 __all__ = ("LoadingBar", "Spinner", "TextProgress", "TerminalUpdater")
 
-_NOT_FOUND = object()
-
-class Indicator(Logged):
+class Indicator(_Logging.Logged):
 	
 	FINISHED : bool = property(lambda self: all(value in self.FINISHED_CODES for value in self.threads.values()))
-	RUN_LOCK : Lock = Default(lambda self: Lock())
+	RUN_LOCK : _Threads.Lock = _Classy.CachedDefault(lambda self: _Threads.Lock())
 	STOP : bool = False
 	FINISHED_CODES = (2, 3, None)
 	FAST_UPDATE = True
@@ -25,9 +25,9 @@ class Indicator(Logged):
 	SUCCEEDED : bool = property(lambda self: all(v is not None and v>1 for v in self.threads.values()))
 	SKIPPED : bool = property(lambda self: all(v==2 for v in self.threads.values()))
 	
-	out : TextIO = Default(lambda self: sys.stdout)
-	rowLock : RLock = Default(lambda self: RLock())
-	refresh : Event = Default(lambda self: Event())
+	out : TextIO = _Classy.Default(lambda self: sys.stdout)
+	rowLock : _Threads.RLock = _Classy.CachedDefault(lambda self: _Threads.RLock())
+	refresh : _Threads.Event = _Classy.CachedDefault(lambda self: _Threads.Event())
 	threads : HookedDict[str,float]
 	running : bool = property(lambda self: not self.RUN_LOCK.acquire(False))
 	startTime : float
@@ -35,7 +35,7 @@ class Indicator(Logged):
 	category : str
 	prompt : str
 	status : str # property
-	color : AnsiTheme = DefaultTheme
+	color : _ANSI.AnsiTheme = _ANSI.DefaultTheme
 	sep : str = " "
 	symbols : tuple[str]
 	borders : tuple[str,str] = ("[", "]")
@@ -45,7 +45,7 @@ class Indicator(Logged):
 	spacer : str = property(lambda self: " " * self.width)
 	body : str # property
 	
-	length : int = Default["width"](lambda self: min(max(map(len, self.names)), self.width-2*self.sepLength))
+	length : int = _Classy.CachedDefault["width"](lambda self: min(max(map(len, self.names)), self.width-2*self.sepLength))
 	sepLength : int	= property(lambda self:len(self.sep))
 	borderLength : int = property(lambda self:sum(len(self.borders[0]), len(self.borders[1])))
 	innerLength : int = property(lambda self:self.length - self.borderLength)
@@ -55,16 +55,16 @@ class Indicator(Logged):
 		lambda self, value: setattr(self, "DEFAULT_WIDTH", value),
 		lambda self: delattr(self, "DEFAULT_WIDTH"))
 	
-	names : tuple[str] = Default["threads"](lambda self: tuple(sorted(self.threads.keys())))
-	shortKeys : tuple[str] = Default["threads"](lambda self: [name if len(name) < self.length else name[:self.length-3]+"..." for name in self.names])
-	N : int = Default["threads"](lambda self: len(self.names))
+	names : tuple[str] = _Classy.CachedDefault["threads"](lambda self: tuple(sorted(self.threads.keys())))
+	shortKeys : tuple[str] = _Classy.Default["threads"](lambda self: [name if len(name) < self.length else name[:self.length-3]+"..." for name in self.names])
+	N : int = _Classy.CachedDefault["threads"](lambda self: len(self.names))
 
 	@overload
 	def __init__(self, /, category : str, threads : HookedDict): ...
 	@overload
 	def __init__(self, /, category : str, threads : HookedDict, length : int): ...
 	@overload
-	def __init__(self, /, category : str, threads : HookedDict, length : int, *, message : str="{status} {category}", out : TextIO, color : AnsiTheme, width : int, refresh : Event, rowLock : RLock): ...
+	def __init__(self, /, category : str, threads : HookedDict, length : int, *, message : str="{status} {category}", out : TextIO, color : _ANSI.AnsiTheme, width : int, refresh : _Threads.Event, rowLock : _Threads.RLock): ...
 	def __init__(self, /, category : str, threads : HookedDict, length : int=None, message : str="{status} {category}", **kwargs):
 		
 		self.category = category
@@ -96,20 +96,20 @@ class Indicator(Logged):
 		message = self.message.format(category=self.category, status=self.status)
 		if self.width-2-len(self.message) < 12:
 			
-			return f"{message}:".ljust(self.width) + timeFormat(timer() - self.startTime).rjust(self.width)
+			return f"{message}:".ljust(self.width) + _Formatting.timeFormat(timer() - self.startTime).rjust(self.width)
 		else:
-			return f"{message}: {timeFormat(timer() - self.startTime)}".ljust(self.width)
+			return f"{message}: {_Formatting.timeFormat(timer() - self.startTime)}".ljust(self.width)
 
-	@Default["width", "N"]
+	@_Classy.Default["width", "N"]
 	def body(self) -> str:
 		
 		maxCols = (self.width+self.sepLength-2) // (self.length+self.sepLength)
 		
-		namesIter = Batched(map(lambda i: f"{{names[{i}]:^{self.length}}}", range(self.N)), maxCols)
-		barsIter = Batched(map(lambda i: f"{{bars[{i}]:^{self.length}}}", range(self.N)), maxCols)
+		namesIter = _Iterators.Batched(map(lambda i: f"{{names[{i}]:^{self.length}}}", range(self.N)), maxCols)
+		barsIter = _Iterators.Batched(map(lambda i: f"{{bars[{i}]:^{self.length}}}", range(self.N)), maxCols)
 		
 		createRow = lambda cols: " "+self.sep.join(cols) + " "*(self.width-1-len(cols)*(self.length+self.sepLength)+self.sepLength)
-		return "".join( map(createRow, Alternate(Repeat(self.spacer), namesIter, barsIter)))
+		return "".join( map(createRow, _Iterators.Alternate(_Iterators.Repeat(self.spacer), namesIter, barsIter)))
 
 	@property
 	def rowGenerator(self) -> Generator[tuple[int,str],None,None]:
@@ -127,7 +127,7 @@ class Indicator(Logged):
 		
 		self.startTime = timer()
 
-		with RePrinter(self.out) as printer, self.RUN_LOCK:
+		with _IO.RePrinter(self.out) as printer, self.RUN_LOCK:
 			while not self.FINISHED and not self.STOP:
 				with self.rowLock:
 					printer.clear()
@@ -180,7 +180,7 @@ class Timer(Indicator):
 
 class LoadingBar(Indicator):
 	
-	symbols = Default["fill", "halfFill", "background"](lambda self: (self.fill, self.halfFill, self.background))
+	symbols = _Classy.Default["fill", "halfFill", "background"](lambda self: (self.fill, self.halfFill, self.background))
 
 	fill : str = "="
 	halfFill : str = ":"
@@ -296,10 +296,10 @@ class TextProgress(Indicator):
 				yield crashString
 		self.n = (self.n+1) % (self.innerLength + 1)
 
-class TerminalUpdater(Logged):
+class TerminalUpdater(_Logging.Logged):
 	
 	threads : HookedDict
-	thread : Thread
+	thread : _Threads.Thread
 	hooks : Hooks
 	out : TextIO = None
 	indicator : Indicator
@@ -378,7 +378,7 @@ class TerminalUpdater(Logged):
 			raise AttributeError(f"Indicator has not been set yet, so it can not be deleted.")
 
 	def start(self, *args, **kwargs):
-		self.thread = Thread(target=self.indicator.run, args=args, kwargs=kwargs, daemon=True)
+		self.thread = _Threads.Thread(target=self.indicator.run, args=args, kwargs=kwargs, daemon=True)
 		self.thread.start()
 	
 	def wait(self, timeout=None):

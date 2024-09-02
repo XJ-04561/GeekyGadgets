@@ -1,0 +1,64 @@
+
+@media screen and (orientation : landscape) {
+	.GeekyIllustration section.MonoFigure {
+		height : 100%;
+		max-width : 100%;
+	}
+}
+@media screen and (orientation : portrait) {
+	.GeekyIllustration section.MonoFigure {
+		max-height : 100%;
+		width : 100%;
+	}
+}
+
+.GeekyIllustration body {
+	height : 100vh;
+	& > main:has(>section.MonoFigure) {
+		overflow: hidden;
+	}
+	& > main {
+		border : none !important;
+		height : 100%;
+		width : 100%;
+		
+		& > section:not(.MonoFigure) {
+			height : calc(100% - 4cm) !important;
+			width : calc(100% - 4cm) !important;
+			margin : auto !important;
+		}
+		& > section.MonoFigure {
+			border : none;
+
+			background : none !important;
+			border : none !important;
+			
+			margin : auto;
+			padding : 0;
+
+			display : flex;
+			flex-direction : row;
+			justify-content: center;
+			align-items: stretch;
+			flex-wrap: wrap;
+			gap : 1em;
+			overflow-y: scroll;
+
+			& > figure {
+				flex-grow: 1;
+				margin : 0;
+				/* flex: 1 1; */
+				aspect-ratio: 1 / 1;
+				& > div > svg {
+					max-height : 100vh;
+				}
+			}
+			&:has(>:only-child) {
+				flex-wrap: unset;
+			}
+		}
+		&:has(>header.FixedHeader) > main:has(>section.MonoFigure) > section.MonoFigure > figure > div > svg {
+			max-height : calc(100vh - 6em);
+		}
+	}
+}

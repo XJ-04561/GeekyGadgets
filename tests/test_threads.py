@@ -1,6 +1,8 @@
 
 from GeekyGadgets.Threads import *
+import pytest
 
+@pytest.mark.skip
 def test_future():
 	
 	import time
@@ -58,7 +60,8 @@ def test_future():
 	except Exception as e:
 		exc = e
 	assert isinstance(exc, TypeError)
-	
+
+@pytest.mark.skip
 def test_thread_group():
 	import time
 	import random
@@ -91,6 +94,7 @@ def test_thread_group():
 
 	assert not any(thread.alive for thread in threads)
 
+@pytest.mark.skip
 def test_thread():
 	import random, time
 

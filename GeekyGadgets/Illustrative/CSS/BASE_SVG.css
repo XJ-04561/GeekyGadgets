@@ -1,0 +1,57 @@
+
+/* Default svg coloring */
+
+.GeekyIllustration {
+	& svg {
+		& circle:not([stroke]) {stroke : var(--PRIMARY-COLOR);}
+		& rect:not([stroke]) {stroke : var(--PRIMARY-COLOR);}
+		& line:not([stroke]) {stroke : var(--PRIMARY-COLOR);}
+
+		& text:not([fill]) {fill : var(--PRIMARY-COLOR);}
+		& textPath:not([fill]) {fill : var(--PRIMARY-COLOR);}
+
+		&.primary, & .primary {
+			& circle:not([stroke]) {stroke : var(--PRIMARY-COLOR);}
+			& rect:not([stroke]) {stroke : var(--PRIMARY-COLOR);}
+			& line:not([stroke]) {stroke : var(--PRIMARY-COLOR);}
+		}
+		&.secondary, & .secondary {
+			& circle:not([stroke]) {stroke : var(--SECONDARY-COLOR);}
+			& rect:not([stroke]) {stroke : var(--SECONDARY-COLOR);}
+			& line:not([stroke]) {stroke : var(--SECONDARY-COLOR);}
+		}
+		&.tertiary, & .tertiary {
+			& circle:not([stroke]) {stroke : var(--TERTIARY-COLOR);}
+			& rect:not([stroke]) {stroke : var(--TERTIARY-COLOR);}
+			& line:not([stroke]) {stroke : var(--TERTIARY-COLOR);}
+		}
+		&.primary, & .primary {
+			& text:not([fill]) {fill : var(--PRIMARY-COLOR);}
+			& tspan:not([fill]) {fill : var(--PRIMARY-COLOR);}
+			& textPath:not([fill]) {fill : var(--PRIMARY-COLOR);}
+		}
+		&.secondary, & .secondary {
+			& text:not([fill]) {fill : var(--SECONDARY-COLOR);}
+			& tspan:not([fill]) {fill : var(--SECONDARY-COLOR);}
+			& textPath:not([fill]) {fill : var(--SECONDARY-COLOR);}
+		}
+		&.tertiary, & .tertiary {
+			& text:not([fill]) {fill : var(--TERTIARY-COLOR);}
+			& tspan:not([fill]) {fill : var(--TERTIARY-COLOR);}
+			& textPath:not([fill]) {fill : var(--TERTIARY-COLOR);}
+		}
+
+		& #PlotY-Axis {
+			& line {z-index: -1;}
+		}
+		& #PlotX-Axis {
+			& line {z-index: -1;}
+		}
+	}
+	/* &.Plot .Legend {
+		visibility : hidden;
+	}
+	&.Plot .Legend:hover {
+		visibility : visible;
+	} */
+}

@@ -1,17 +1,18 @@
 
-from GeekyGadgets.Threads.Globals import *
-
-__all__ = ("DummyThread", "DummyLock")
+import GeekyGadgets.Threads.Globals as _GL
+import GeekyGadgets.Threads.Thread as _Thread
+import GeekyGadgets.Threads.Groups as _Groups
+import GeekyGadgets.Threads.Groups as _Groups
 
 class DummyThread:
 
-	group : "ThreadGroup"
-	future : "Future"
-	pre : Callable
-	target : Callable
-	post : Callable
+	group : "_Groups.ThreadGroup"
+	future : "_Groups.Future"
+	pre : _GL.Callable
+	target : _GL.Callable
+	post : _GL.Callable
 
-	def __init__(self, *, group: "ThreadGroup | None" = None, pre: Callable[[Any], object] | None = None, target: Callable[[Any], object] | None = None, post: Callable[[Any], object] | None = None, name: str | None = None, args: Iterable[Any] = [], kwargs: Mapping[str, Any] | None = None, daemon: bool | None = None) -> None:
+	def __init__(self, *, group: "_Groups.ThreadGroup | None" = None, pre: _GL.Callable[[_GL.Any], object] | None = None, target: _GL.Callable[[_GL.Any], object] | None = None, post: _GL.Callable[[_GL.Any], object] | None = None, name: str | None = None, args: _GL.Iterable[_GL.Any] = [], kwargs: _GL.Mapping[str, _GL.Any] | None = None, daemon: bool | None = None) -> None:
 		self.target=target
 		self.name=name
 		self.args=args
@@ -23,7 +24,7 @@ class DummyThread:
 		self.group = group
 		if self.group:
 			self.group.add(self)
-		self.future = Future(self)
+		self.future = _Groups.Future(self)
 	alive = False
 	def join(self, *args):
 		pass
@@ -42,9 +43,3 @@ class DummyLock:
 	@property
 	def locked(self):
 		return False
-
-try:
-	from GeekyGadgets.Threads.Thread import *
-	from GeekyGadgets.Threads.Groups import *
-except ImportError:
-	pass

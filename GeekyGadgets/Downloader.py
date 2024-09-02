@@ -4,7 +4,7 @@ from GeekyGadgets.URL import URL_TEMPLATE, URL, HTTP, HTTPS, FTP, ping
 from GeekyGadgets.Threads import MultiTasker, threadTask
 from GeekyGadgets.Hooks import Hooks, GlobalHooks, ProgressHook
 from GeekyGadgets.Paths import Path, pathize
-from GeekyGadgets.Classy import Default
+from GeekyGadgets.Classy import Default, CachedDefault
 from urllib.request import urlretrieve, HTTPError
 from GeekyGadgets.This import this
 
@@ -19,7 +19,7 @@ class DownloadFailed(Exception):
 
 class Downloader(MultiTasker):
 
-	SOURCES : tuple[tuple[str, URL]] = Default(lambda self: tuple(), lambda self, value: SET__DICT__("SOURCES", tuple((name, URL_TEMPLATE(value)) for name, value in self.SOURCES)))
+	SOURCES : tuple[tuple[str, URL]] = CachedDefault(lambda self: tuple(), lambda self, value: SET__DICT__("SOURCES", tuple((name, URL_TEMPLATE(value)) for name, value in self.SOURCES)))
 
 	postProcessFunc : Callable[[Path],Path]
 	directory : Path

@@ -1,7 +1,7 @@
 
 from GeekyGadgets.Threads.Globals import *
 from GeekyGadgets.Hooks import *
-from GeekyGadgets.Classy import Default, threaded
+from GeekyGadgets.Classy import Default, threaded, CachedDefault
 from GeekyGadgets.Reporting import Reporter, Advisor
 
 from GeekyGadgets.Threads.Thread import Thread, Future

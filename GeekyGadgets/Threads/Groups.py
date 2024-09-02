@@ -1,6 +1,6 @@
 
 from GeekyGadgets.Threads.Globals import *
-import GeekyGadgets.Classy as Classy
+import GeekyGadgets.Classy as _Classy
 
 __all__ = ("ThreadGroup",)
 
@@ -43,7 +43,7 @@ class ThreadGroup:
 	def __getitem__(self, key : int|str) -> "Thread":
 		return self.threads[self.names[key]] if isinstance(key, int) else self.threads[key]
 	
-	@Classy.Default
+	@_Classy.Default
 	def name(self):
 		for name, value in self.GROUPS.items():
 			if self is value:
@@ -71,8 +71,7 @@ class ThreadGroup:
 	@overload
 	def __or__(self, other : Iterable["Thread"]) -> "ThreadGroup": ...
 	def __or__(self, other):
-		from GeekyGadgets.Iterators import Chain
-		return ThreadGroup(Chain(self, other))
+		return ThreadGroup(_Iterators.Chain(self, other))
 
 	def wait(self, timeout : float|None=None) -> bool:
 		"""Wait for all started threads in the group to finish. Returns `True` if all threads in the group have been 
@@ -120,6 +119,7 @@ try:
 	
 	from GeekyGadgets.Threads.Synch import LockedDict, RLock
 	from GeekyGadgets.Threads.Thread import *
+	import GeekyGadgets.Iterators as _Iterators
 	ThreadGroup.GROUPS = LockedDict()
 except ImportError:
 	pass

@@ -2,7 +2,7 @@
 from GeekyGadgets.Globals import *
 from GeekyGadgets.Hooks import Hooks, GlobalHooks
 from GeekyGadgets.Paths import Path
-from GeekyGadgets.Classy import Default
+from GeekyGadgets.Classy import Default, CachedDefault
 from GeekyGadgets.This import this
 from GeekyGadgets.Threads import Thread
 from GeekyGadgets.Functions import first
@@ -75,7 +75,7 @@ class Command:
 	hooks : Hooks
 	processes : "Process"
 	notOnPath = cached_property(lambda self: set(map(lambda x:x.args[0], filter(lambda x:not x.ON_PATH, self.processes))))
-	directory : Path = Default(lambda self:Path("."), lambda self, value: self.__dict__.__setitem__("directory", Path(self.directory)))
+	directory : Path = CachedDefault(lambda self:Path("."), lambda self, value: self.__dict__.__setitem__("directory", Path(self.directory)))
 
 	_thread : Thread = None
 
@@ -164,8 +164,8 @@ class Command:
 
 class Process:
 
-	OUT : LocalIO = Default(lambda self:LocalIO() if self.filenameDUMP is None else None)
-	ERR : LocalIO = Default(lambda self:LocalIO())
+	OUT : LocalIO = CachedDefault(lambda self:LocalIO() if self.filenameDUMP is None else None)
+	ERR : LocalIO = CachedDefault(lambda self:LocalIO())
 	IN : BufferedReader = Default(lambda self: self.popen.stdin if not isinstance(self.parent, PipeProcess) else self.parent.OUT)
 	RUNNING : bool
 	EXITCODES : int | list[int] = property(lambda self: [self.popen.returncode] + self.child.EXITCODES if self.child else [self.popen.returncode])
@@ -173,12 +173,12 @@ class Process:
 	ON_PATH = property(lambda self: shutil.which(self.args[0]) is not None)
 	END_SYMBOL : str= None
 
-	parent : "Process" = Default(lambda self:FakeProcess(), lambda self, value:SETATTR(self.parent, "child", self) if getattr(self.parent, "child") is not self else None)
+	parent : "Process" = CachedDefault(lambda self:FakeProcess(), lambda self, value:SETATTR(self.parent, "child", self) if getattr(self.parent, "child") is not self else None)
 	args : Iterable[str]
-	child : "Process" = Default(lambda self:FakeProcess(), lambda self, value:SETATTR(self.child, "parent", self) if getattr(self.child, "parent") is not self else None)
+	child : "Process" = CachedDefault(lambda self:FakeProcess(), lambda self, value:SETATTR(self.child, "parent", self) if getattr(self.child, "parent") is not self else None)
 	category : str
 	name : str = Default["args"](lambda self: "_".join(filter(WORD_PATTERN.fullmatch, map(lambda x:os.path.basename(os.path.splitext(x)[0]), self.args[:2]))))
-	directory : Path = Default(lambda self:Path("."), lambda self, value: self.__dict__.__setitem__("directory", Path(self.directory)))
+	directory : Path = CachedDefault(lambda self:Path("."), lambda self, value: self.__dict__.__setitem__("directory", Path(self.directory)))
 	filenameERR : str = Default["name"](lambda self: f"{self.name}.err.log")
 	filenameOUT : str = Default["name"](lambda self: f"{self.name}.out.log")
 	filenameDUMP : str = None

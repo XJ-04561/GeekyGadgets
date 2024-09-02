@@ -1,15 +1,17 @@
 
 from GeekyGadgets.Bioinformatics.Globals import *
-from GeekyGadgets.Classy import Default
-from GeekyGadgets.Formatting.SISize import shortenNumber
-from GeekyGadgets.Logging import Logged, ROOT_LOGGER
-from GeekyGadgets.Hooks import GlobalHooks, Hooks
-from GeekyGadgets.Iterators import Batched, Count
+
 import gunzip
+
+import GeekyGadgets.Classy as _Classy
+import GeekyGadgets.Formatting.SISize as _SISize
+import GeekyGadgets.Logging as _Logging
+import GeekyGadgets.Hooks as _Hooks
+import GeekyGadgets.Iterators as _Iterators
 
 __all__ = ("subSampleFASTQ", "subSampleName", "RandomReads", "createReadsIndex")
 
-LOGGER = ROOT_LOGGER.getChild(__name__)
+LOGGER = _Logging.ROOT_LOGGER.getChild(__name__)
 
 SUB_SAMPLE_NAMES = {
 	"reads" : "Reads",
@@ -21,7 +23,7 @@ SUB_SAMPLE_NAMES = {
 
 class RandomReads(random.Random):
 	
-	length : int = Default["reads"](lambda self : len(self.reads))
+	length : int = _Classy.CachedDefault["reads"](lambda self : len(self.reads))
 	
 	@overload
 	def __init__(self, reads : Iterable[str], x: int | float | str | bytes | bytearray | None = None, *, condition : Callable[[str],bool]) -> None: ...
@@ -57,9 +59,9 @@ class RandomReads(random.Random):
 def subSampleName(name : FilePath|DirectoryPath|str, type : Literal["reads","coverage","dilution","bases","bytes"], *N, index : int=None) -> str:
 	
 	if index is None:
-		bracketedID = f"[{SUB_SAMPLE_NAMES[type]}-{'-'.join(map(shortenNumber, N))}]"
+		bracketedID = f"[{SUB_SAMPLE_NAMES[type]}-{'-'.join(map(_SISize.shortenNumber, N))}]"
 	else:
-		bracketedID = f"[{SUB_SAMPLE_NAMES[type]}-{str(index).zfill(len(str(N[0])))}-{'-'.join(map(shortenNumber, N))}]"
+		bracketedID = f"[{SUB_SAMPLE_NAMES[type]}-{str(index).zfill(len(str(N[0])))}-{'-'.join(map(_SISize.shortenNumber, N))}]"
 	if isinstance(name, FilePath):
 		return name.name + bracketedID + "." + name.ext
 	elif isinstance(name, DirectoryPath):
@@ -167,9 +169,9 @@ def subSampleFASTQ(files : int, source : FilePath|FileList[FilePath], *, bytes :
 @overload
 def subSampleFASTQ(files : int, source : FilePath|FileList[FilePath], *,
 			   reads : list[int]=None, dilution : list[int]=None, coverage : list[int,int]=None, bytes : list[int]=None, bases : list[int]=None,
-			   outDir : DirectoryPath=None, hooks=GlobalHooks, steps : int=100) -> list[tuple[str]]: ...
+			   outDir : DirectoryPath=None, hooks=_Hooks.GlobalHooks, steps : int=100) -> list[tuple[str]]: ...
 def subSampleFASTQ(files : int, source : FilePath|FileList[FilePath], *,
-			   outDir : DirectoryPath=None, hooks=GlobalHooks, steps : int=100,
+			   outDir : DirectoryPath=None, hooks=_Hooks.GlobalHooks, steps : int=100,
 			   **kwargs) -> list[tuple[str]]:
 	
 	LOGGER.info(f"Sub Sampling: From {source}.")
@@ -217,7 +219,7 @@ def subSampleFASTQ(files : int, source : FilePath|FileList[FilePath], *,
 	threshold = 0
 	# First 1/4 of progress
 	LOGGER.info(f"Sub Sampling: Read Selection.")
-	for readSet in Batched(RandomReads(readsIndex).infiniteReads(), len(outData)):
+	for readSet in _Iterators.Batched(RandomReads(readsIndex).infiniteReads(), len(outData)):
 		for prog, sampleData, outReads in zip(progressTracker, outData, readSet):
 			if prog < 1.0:
 				for fileData, read in zip(sampleData, outReads):
@@ -232,11 +234,11 @@ def subSampleFASTQ(files : int, source : FilePath|FileList[FilePath], *,
 	# 2/4 of progress
 	LOGGER.info(f"Sub Sampling: Read Aggregation.")
 	readsAggregates = [[] for _ in outFiles[0]]
-	for i, data, files in zip(Count(), outData, outFiles):
+	for i, data, files in zip(_Iterators.Count(), outData, outFiles):
 		if steps * ((1/4) + (1/4) * i / len(outFiles)) >= threshold:
 			hooks.trigger("SplitFastq", {"type" : "Progress", "name" : source.name, "value" : min(1.0, (1/4) + (1/4) * i / len(outFiles))})
 			threshold += 1
-		for fileN, file, reads in zip(Count(), files, data):
+		for fileN, file, reads in zip(_Iterators.Count(), files, data):
 			readsAggregates[fileN].extend((file, read) for read in reads)
 
 	# 3/4 of progress
@@ -249,7 +251,7 @@ def subSampleFASTQ(files : int, source : FilePath|FileList[FilePath], *,
 
 	# 4/4 of progress
 	LOGGER.info(f"Sub Sampling: Writing Files.")
-	for i, aggregate, dataFile in zip(Count(), readsAggregates, dataFiles):
+	for i, aggregate, dataFile in zip(_Iterators.Count(), readsAggregates, dataFiles):
 		if steps * ((3/4) + (1/4) * i / len(readsAggregates)) >= threshold:
 			hooks.trigger("SplitFastq", {"type" : "Progress", "name" : source.name, "value" : min(1.0, (3/4) + (1/4) * i / len(readsAggregates))})
 			threshold += 1

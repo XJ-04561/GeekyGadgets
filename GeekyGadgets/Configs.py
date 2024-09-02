@@ -205,7 +205,7 @@ class Config(dict):
 		return str(self)
 
 	def walk(self) -> "ConfigWalker":
-		from GeekyGadgets.Iterators import ConfigWalker
+		from GeekyGadgets.Iterators.Walkers import ConfigWalker
 		return ConfigWalker(self)
 	
 	def __getattr__(self, name : str):
@@ -288,13 +288,13 @@ class Config(dict):
 	
 	@property
 	def categories(self) -> Generator[tuple[str,"ConfigCategory"],None,None]:
-		from GeekyGadgets.Iterators import ConfigWalker
+		from GeekyGadgets.Iterators.Walkers import ConfigWalker
 		for root, name, value in ConfigWalker(self).categories:
 			yield (name, value)
 	
 	@property
 	def variables(self) -> Generator[tuple[str,Any],None,None]:
-		from GeekyGadgets.Iterators import ConfigWalker
+		from GeekyGadgets.Iterators.Walkers import ConfigWalker
 		for root, name, value in ConfigWalker(self).variables:
 			yield (name, value)
 
@@ -314,6 +314,6 @@ def loadTOML(filename, dictType=Config):
 			return dictType.fromDict(toml.load(f))
 
 try:
-	from GeekyGadgets.Iterators import ConfigWalker
+	from GeekyGadgets.Iterators.Walkers import ConfigWalker
 except ImportError:
 	pass

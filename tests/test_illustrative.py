@@ -1,99 +1,210 @@
 
-from GeekyGadgets.Illustrative import *
-from GeekyGadgets.TypeHinting import Number
-from GeekyGadgets.Illustrative.NodesAndGraphs import XML_TAG_PATTERN, XML_ATTRIBUTES_PATTERN
+import random, pytest, os
+from GeekyGadgets.Illustrative import IllustrateFigure
+import math
 
-import sys, os
-from subprocess import Popen
+N = 10
+DATA = [(x, 40*math.cos(x*math.pi/20)+50+random.random()*10) for i in range(N) for x in range(20)]
 
-EXE = sys.executable
-
-def test_from_graph_ml():
-	
+def test_line_clone():
+	from GeekyGadgets.Illustrative.Plots import LinePlot
 	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
 	os.chdir(os.path.splitext(__file__)[0])
 
-	assert XML_TAG_PATTERN.match("<node id=\"1\">\n"
-    "  <data id=\"genotype\">T/N.1</data>\n"
-    "</node>\n"
-    "<node id=\"2\">\n"
-    "  <data id=\"genotype\">T.1</data>\n"
-    "</node>\n"
-    "<node id=\"3\">\n"
-    "  <data id=\"genotype\">B.1</data>\n"
-    "</node>")
-	assert XML_ATTRIBUTES_PATTERN.match(' id="nonCanon" for="edge" attr.name="Non-Canonical Bases" attr.type="int"')
+	errorStyle = "clone"
+	plot = LinePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_line_clone.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
 
-	Graph.fromGraphML(open("tree.graphml", "r"))
-
-	assert True
-
-def test_tree():
-	
+def test_line_widen():
+	from GeekyGadgets.Illustrative.Plots import LinePlot
 	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
 	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "widen"
+	plot = LinePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_line_widen.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_line_shadow():
+	from GeekyGadgets.Illustrative.Plots import LinePlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "shadow"
+	plot = LinePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_line_shadow.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_line_whiskers():
+	from GeekyGadgets.Illustrative.Plots import LinePlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "whiskers"
+	plot = LinePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_line_whiskers.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_line_boxplot():
+	from GeekyGadgets.Illustrative.Plots import LinePlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "boxplot"
+	plot = LinePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_line_boxplot.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_scatter_clone():
+	from GeekyGadgets.Illustrative.Plots import ScatterPlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "clone"
+	plot = ScatterPlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_scatter_clone.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_scatter_widen():
+	from GeekyGadgets.Illustrative.Plots import ScatterPlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "widen"
+	plot = ScatterPlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_scatter_widen.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_scatter_shadow():
+	from GeekyGadgets.Illustrative.Plots import ScatterPlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "shadow"
+	plot = ScatterPlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_scatter_shadow.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_scatter_whiskers():
+	from GeekyGadgets.Illustrative.Plots import ScatterPlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "whiskers"
+	plot = ScatterPlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_scatter_whiskers.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_scatter_boxplot():
+	from GeekyGadgets.Illustrative.Plots import ScatterPlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "boxplot"
+	plot = ScatterPlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_scatter_boxplot.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_curve_clone():
+	from GeekyGadgets.Illustrative.Plots import CurvePlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "clone"
+	plot = CurvePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_curve_clone.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_curve_widen():
+	from GeekyGadgets.Illustrative.Plots import CurvePlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "widen"
+	plot = CurvePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_curve_widen.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_curve_shadow():
+	from GeekyGadgets.Illustrative.Plots import CurvePlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "shadow"
+	plot = CurvePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_curve_shadow.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_curve_whiskers():
+	from GeekyGadgets.Illustrative.Plots import CurvePlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "whiskers"
+	plot = CurvePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_curve_whiskers.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+def test_curve_boxplot():
+	from GeekyGadgets.Illustrative.Plots import CurvePlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
+
+	errorStyle = "boxplot"
+	plot = CurvePlot(DATA)
+	plot.setErrorStyle(errorStyle)
+	with open("test_curve_boxplot.html", "w") as f:
+		f.write(IllustrateFigure(plot).illustrateHTML().compile())
+
+@pytest.mark.skip
+def test_heat_clone():
+	from GeekyGadgets.Illustrative.Plots import HeatPlot
+	errorStyle = "clone"
+@pytest.mark.skip
+def test_heat_widen():
+	from GeekyGadgets.Illustrative.Plots import HeatPlot
+	errorStyle = "widen"
+@pytest.mark.skip
+def test_heat_shadow():
+	from GeekyGadgets.Illustrative.Plots import HeatPlot
+	errorStyle = "shadow"
+@pytest.mark.skip
+def test_heat_whiskers():
+	from GeekyGadgets.Illustrative.Plots import HeatPlot
+	errorStyle = "whiskers"
+@pytest.mark.skip
+def test_heat_boxplot():
+	from GeekyGadgets.Illustrative.Plots import HeatPlot
+	errorStyle = "boxplot"
+
+def test_plots_all():
 	
-	class CanSNPLeaf(Leaf):
-		"""Properties:
-		genotype : str"""
-		
-		@property
-		def hidden(self) -> bool:
-			if not self.incoming:
-				return False
-			if not self.incoming[0].properties["depth"]:
-				return False
-			if not isinstance(self.incoming[0].properties["depth"], Number):
-				return False
-			if any(not child.hidden for child in self.children):
-				return False
-			if 0.01 < self.incoming[0].properties["ratio"]:
-				return False
-			return True
+	from GeekyGadgets.Illustrative.Plots import LinePlot, CurvePlot, ScatterPlot
+	os.makedirs(os.path.splitext(__file__)[0], exist_ok=True)
+	os.chdir(os.path.splitext(__file__)[0])
 
-		@property
-		def color(self) -> str:
-			
-			if not self.incoming or not self.incoming[0].properties["depth"] or not isinstance(self.incoming[0].properties["depth"], Number):
-				return "#303030"
-			elif 0.05 < self.incoming[0].properties["nonCanon"] / self.incoming[0].properties["depth"]:
-				return "#ff30ff"
-			calledSNPs = []
-			ratios = []
-			node = self
-			while node.incoming:
-				ratios.append(node.incoming[0].properties["ratio"])
-				calledSNPs.append(node.incoming[0].properties["called"])
-				node = node.incoming[0].pair[0]
-			
-			if any(prevCalled > 1 and isinstance(thisNode, Number) and isinstance(prevNode, Number) and 1.1 < thisNode/prevNode for thisNode, prevNode, prevCalled in zip(ratios, ratios[1:], calledSNPs[1:])):
-				return "#ff30ff"
-			
-			return "#20ff20"
-
-	class CanSNPBranch(Branch):
-		"""Properties:
-		called : int
-		ancestral : int
-		nonCanon : int
-		depth : int
-		ratio : float
-		logRatio : float"""
-
-		weight = property(lambda self: self.properties["ratio"])
+	from GeekyGadgets.Illustrative.Envelopes import IllustrativeCollection
 	
-	class CanSNPTree(Tree):
-		nodeClass = CanSNPLeaf
-		edgeClass = CanSNPBranch
-
-		weightProp : str = "ratio"
-
-	tree = CanSNPTree.fromGraphML(open("tree.graphml", "r"))
-
-	tree.illustrate("HTML", filename="tree.html", nameProp="genotype")
-
-	tree = CanSNPTree.fromGraphML(open("tree_4.graphml", "r"))
-
-	tree.illustrate("HTML", filename="tree_4.html", nameProp="genotype")
-	
-	assert True
+	for plotType in [LinePlot, CurvePlot, ScatterPlot]:
+		with open(f"{plotType.__name__}All.html", "w") as f:
+			IllustrativeCollection(
+				[
+					plotType(DATA, errorStyle=errorStyle)
+					for errorStyle in ["clone", "widen", "shadow", "whiskers", "boxplot"]
+				]
+			).illustrateHTML(file=f)

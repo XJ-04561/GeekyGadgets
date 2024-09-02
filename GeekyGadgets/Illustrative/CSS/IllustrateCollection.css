@@ -1,0 +1,257 @@
+
+@media screen and (min-aspect-ratio: 6/4) {
+	.GeekyIllustration .CollectionViewer {
+		flex-direction: row;
+		justify-content: start;
+	}
+	.GeekyIllustration .CollectionViewer > aside {
+		flex-direction : column;
+	}
+	.GeekyIllustration .CollectionViewer > aside > header {
+		height : calc(2 * var(--BORDER-RADIUS-THICK));
+	}
+	.GeekyIllustration .CollectionViewer > aside > nav {
+		flex-direction: column;
+		overflow-y : scroll;
+		padding : 0.5em;
+		margin-top : calc(2 * var(--BORDER-RADIUS-THICK));
+	}
+	.CollectionViewer .CollectionViewer > aside > nav > div {
+		width : 100%;
+	}
+}
+@media screen and (max-aspect-ratio: 6/4) {
+	.GeekyIllustration .CollectionViewer {
+		flex-direction: column;
+		justify-content: end;
+	}
+	.GeekyIllustration .CollectionViewer > .SvgContainer {
+		height : calc(82% - 3cm);
+	}
+	.GeekyIllustration .CollectionViewer > aside {
+		flex-direction : row;
+		height : 18%
+	}
+	.GeekyIllustration .CollectionViewer > aside > header {
+		height : var(--BORDER-RADIUS-THICK);
+	}
+	.GeekyIllustration .CollectionViewer > aside > nav {
+		flex-direction : row;
+		margin-top : var(--BORDER-RADIUS-THICK);
+		overflow-x: scroll;
+		overflow-y : none;
+		padding : 0.5em;
+	}
+	.GeekyIllustration .CollectionViewer > aside > nav > div {
+		height : 100%;
+	}
+}
+
+/* div.FigureContainer {
+	margin : 0;
+	padding : 0;
+	height : 100%;
+	display : flex;
+	flex-flow: column wrap;
+	justify-content: space-between;
+	gap : 1vh 1vw;
+} */
+.GeekyIllustration .CollectionViewer {
+	position : relative;
+	margin: 0;
+	padding : 1cm;
+	gap : 1cm;
+	display : flex;
+	align-items: stretch;
+	justify-content: space-between;
+
+	min-width: 600px;
+	min-height: 600px;
+
+	& > * {
+		border-radius: var(--BORDER-RADIUS-THICK);
+	}
+	& > aside {
+		display : flex;
+		justify-content : space-evenly;
+		align-items : stretch;
+		flex-grow: 1;
+		position: relative;
+		& * {
+			hyphens : auto;
+		}
+		& > header {
+			position: absolute;
+			background: var(--SECONDARY-BACKGROUND);
+			border-bottom: var(--BORDER-WIDTH-THIN) solid var(--SECONDARY-BORDER);
+			z-index: 2;
+			top : 0;
+			left : 0;
+			right : 0;
+			border-top-left-radius : var(--BORDER-RADIUS-THICK);
+			border-top-right-radius : var(--BORDER-RADIUS-THICK);
+			text-align: center;
+			vertical-align: middle;
+			word-wrap: break-word;
+			text-wrap: wrap;
+			
+			display: flex;
+			flex-direction: column;
+			justify-content: space-evenly;
+			align-items: stretch;
+			& > * {
+				margin: auto calc(var(--BORDER-RADIUS-THICK) / 2);
+			}
+		}
+
+		& > nav {
+			flex-grow : 1;
+			display : flex;
+			justify-content : flex-start;
+			align-items : stretch;
+			gap : 1em;
+			
+			scroll-padding-block-end : var(--BORDER-RADIUS-THICK);
+
+			border-bottom-left-radius : var(--BORDER-RADIUS-THICK);
+			border-bottom-right-radius : var(--BORDER-RADIUS-THICK);
+
+			& > div {
+				aspect-ratio : 1 / 1;
+				position: relative;
+				padding : 0;
+				margin : 0;
+				border-radius : var(--BORDER-RADIUS-THIN);
+				background : #00000020;
+
+				&:has( .showing) {
+					display : none;
+				}
+				&:hover {
+					background : #00000040;
+				}
+				& > div {
+					position: absolute;
+					top : 0.25em;
+					right : 0.25em;
+					bottom : 0.25em;
+					left : 0.25em;
+					padding : 0;
+					margin : 0;
+
+					& > div {
+						position : relative;
+						padding : 0;
+						margin : 0;
+						overflow-y: scroll;
+						aspect-ratio: 1/1;
+						& > * {
+							position : relative;
+							margin : 0;
+
+							& > svg {
+								transform: scale(0.9);
+							}
+						}
+						
+					}
+				}
+			}
+		}
+	}
+
+	& > .SvgContainer {
+		margin : 0;
+		padding : 0;
+		flex-grow: 5;
+		position: relative;
+
+		&::after {
+			content: "";
+			position: absolute;
+			top: -2px;
+			left: -2px;
+			right: -2px;
+			bottom: -2px;
+			border-radius: var(--BORDER-RADIUS-THICK);
+			box-shadow: inset var(--PAGE-BACKGROUND) 0 0 var(--BORDER-WIDTH-THICK) var(--BORDER-WIDTH-THICK);
+			pointer-events: none;
+		}
+		& > div {
+			position : relative;
+			overflow : hidden;
+			height : 100%;
+			width : 100%;
+			display : flex;
+			flex-direction : row;
+			justify-content : center;
+			align-items : stretch;
+
+			& > div {
+				aspect-ratio : 1 / 1;
+				position : relative;
+
+				& > div {
+					position : absolute;
+					top : 0;
+					left : 0;
+					right : 0;
+					bottom : 0;
+					transition: all 1s ease;
+
+					& > figure {
+						&:has(svg.Graph.Tree) {
+							padding : 0;
+							margin : 0;
+							height : 100%;
+							width : 100%;
+						}
+						& svg.Graph.Tree {
+							padding : 0;
+							margin : 0;
+						}
+						&:has(>div>svg) {
+							display: flex;
+							justify-content: stretch;
+							align-items: stretch;
+						}
+						& > div:has(>svg) {
+							position: relative;
+							height : 100%;
+							width : 100%;
+						}
+						& > div > svg {
+							position: absolute;
+							top:0;
+							left:0;
+							right:0;
+							bottom:0;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+.GeekyIllustration section.MonoFigure > .CollectionViewer {
+	background : none !important;
+	border : none !important;
+
+	margin : auto;
+	height : calc(100% - 2cm);
+	width : calc(100% - 2cm);
+
+	& > .SvgContainer {
+		border-radius: var(--BORDER-RADIUS-THICK);
+
+		& > div {
+			border-radius: var(--BORDER-RADIUS-THICK);
+			overflow : hidden;
+			& figure {
+				margin : 0;
+				height : 100%;
+				width : 100%;
+			}
+		}
+	}
+}

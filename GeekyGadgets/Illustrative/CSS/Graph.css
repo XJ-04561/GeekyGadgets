@@ -1,0 +1,15 @@
+
+
+.GeekyIllustration svg.Graph g[hidden=true] * {
+	opacity: 0.2;
+}
+.GeekyIllustration svg.Graph g[hidden=true] g[hidden=true] g[hidden=true] {
+	visibility : hidden;
+}
+.GeekyIllustration svg.Graph g[shown=true] * {
+	opacity : 1.0;
+	visibility : visible;
+}
+/* .GeekyIllustration svg.Graph g[hidden=true] > g[hidden=true] > g[hidden=true] > g[hidden=true] {
+	display : none;
+} */

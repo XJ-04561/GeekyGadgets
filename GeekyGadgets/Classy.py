@@ -1,9 +1,24 @@
 
 from GeekyGadgets.Globals import *
 
-__all__ = ("Default", "ClassProperty", "CachedClassProperty", "threaded")
+
+__all__ = ("Default", "CachedDefault", "ClassProperty", "CachedClassProperty", "threaded")
 
 _NOT_SET = object()
+LOGGER = ROOT_LOGGER.getChild(__name__)
+
+class CachedDefaultCodependent(AttributeError):
+	
+	offender : str
+
+	def __init__(self, offender : str, trace : Iterable[str], **kwargs) -> None:
+		self.offender = offender
+		super().__init__(f"Couldn't get default value for {offender!r} because its dependencies are dependent on itself. Path of attributes that caused the loop: {' > '.join(map(repr, trace))}", **kwargs)
+
+_INSTANCE = TypeVar("_INSTANCE")
+_NAME = TypeVar("_NAME")
+_VALUE = TypeVar("_VALUE")
+_PROP_VALUE = TypeVar("_PROP_VALUE")
 
 class Default(property):
 	"""Works similarly to `functools.cached_property`, and has a setter and deleter by default like that of 
@@ -77,31 +92,49 @@ class Default(property):
 
 	```"""
 
+	TRACE : "dict[_Thread.Thread,set]" = {}
+
 	name : str
 
-	fget : Callable
-	fset : Callable
-	fdel : Callable
-	deps : tuple
+	fget : Callable[[_INSTANCE],_PROP_VALUE] | None = None
+	fset : Callable[[_INSTANCE,_VALUE],None] | None = None
+	fdel : Callable[[_INSTANCE],None] | None = None
+	deps : tuple[str] = ()
+	default : Any = _NOT_SET
 
-	locks : "LockedDict[int,RLock]"
+	locks : "_Synch.LockedDict[int,_Synch.RLock]"
 
-	def __init__(self, fget=None, fset=None, fdel=None, doc=None, deps : tuple[str]=()):
-		super().__init__(fget, fset, fdel, doc)
-		from GeekyGadgets.Threads.Synch import LockedDict, RLock
-		if hasattr(self.fget, "__code__"):
-			self.fgetArgnames = self.fget.__code__.co_varnames[:self.fget.__code__.co_argcount+self.fget.__code__.co_kwonlyargcount]
-		elif hasattr(getattr(self.fget, "__func__", None), "__code__"):
-			self.fgetArgnames = self.fget.__func__.__code__.co_varnames[:self.fget.__code__.co_argcount+self.fget.__code__.co_kwonlyargcount]
-		else:
-			self.fgetArgnames = ()
-		if deps or not hasattr(self, "deps"):
-			self.deps = deps
-		if not hasattr(self, "locks"):
-			self.locks = LockedDict(factory=RLock)
+	def __init__(self, fget : Callable[[_INSTANCE],_PROP_VALUE]|None=None, fset : Callable[[_INSTANCE,_VALUE],None]|None=None, fdel : Callable[[_INSTANCE],None]|None=None, doc : str|None=None, deps : tuple[str]|None=None, *, default : Any=_NOT_SET):
 		
-	def __call__(self, fget=None, fset=None, fdel=None, doc=None):
-		self.__init__(fget, fset, fdel, doc=doc)
+		import GeekyGadgets.Threads.Synch as _Synch
+		import GeekyGadgets.Threads.Thread as _Thread
+		import GeekyGadgets.Threads.Groups as _Groups
+		self.deps = deps or self.deps
+		self.default = default
+		if not hasattr(self, "locks"):
+			self.locks = _Synch.LockedDict(factory=_Synch.RLock)
+		
+		super().__init__(fget or self.fget, fset or self.fset, fdel or self.fdel, doc or self.__doc__)
+		if fget is not None:
+			self.fget = fget
+		if fset is not None:
+			self.fset = fset
+		if fdel is not None:
+			self.fdel = fdel
+		if doc is not None:
+			self.__doc__ = doc
+		if default is not _NOT_SET:
+			self.default = default
+		
+		# if hasattr(self.fget, "__code__"):
+		# 	self.fgetArgnames = self.fget.__code__.co_varnames[:self.fget.__code__.co_argcount+self.fget.__code__.co_kwonlyargcount]
+		# elif hasattr(getattr(self.fget, "__func__", None), "__code__"):
+		# 	self.fgetArgnames = self.fget.__func__.__code__.co_varnames[:self.fget.__code__.co_argcount+self.fget.__code__.co_kwonlyargcount]
+		# else:
+		# 	self.fgetArgnames = ()
+		
+	def __call__(self, fget=None, fset=None, fdel=None, doc=None, default=_NOT_SET):
+		self.__init__(fget, fset, fdel, doc=doc, default=default)
 		return self
 	
 	def __class_getitem__(cls, deps):
@@ -116,24 +149,34 @@ class Default(property):
 		self.name = name
 		if "return" in getattr(self.fget, "__annotations__", ()) and self.name not in getattr(owner, "__annotations__", ()):
 			owner.__annotations__[name] = self.fget.__annotations__["return"]
-
-	def __get__(self, instance, owner=None):
+		
+	def __get__(self, instance : _INSTANCE, owner : type[_INSTANCE]|None=None) -> _PROP_VALUE:
 		with self.locks[id(self)]:
-			from GeekyGadgets.Functions import forceHash, getAttrChain
+			from GeekyGadgets.Threads import current_thread
 			if instance is None:
 				return self
-			elif self.name in getattr(instance, "__dict__", ()):
+			elif self.name in instance.__dict__:
 				return instance.__dict__[self.name]
 			
-			values = tuple(getAttrChain(instance, dep) for dep in self.deps)
-			currentHash = forceHash(values)
+			if current_thread() not in self.TRACE:
+				self.TRACE[current_thread()] = set()
 			
-			if hasattr(instance, "__dict__") and instance.__dict__.get(f"_default_{self.name}", (currentHash+1,))[0] == currentHash:
-				return instance.__dict__[f"_default_{self.name}"][1]
-			else:
+			if self.name in self.TRACE[current_thread()]:
+				if self.default is _NOT_SET:
+					raise CachedDefaultCodependent(self.name, self.TRACE[current_thread()])
+				else:
+					return self.default
+			
+			self.TRACE[current_thread()].add(self.name)
+			try:
 				ret = self.fget(instance)
-				instance.__dict__[f"_default_{self.name}"] = (currentHash, ret)
-				return ret
+			except:
+				self.TRACE[current_thread()].discard(self.name)
+				raise
+			else:
+				self.TRACE[current_thread()].discard(self.name)
+			
+			return ret
 	
 	def __set__(self, instance, value):
 		with self.locks[id(self)]:
@@ -147,8 +190,92 @@ class Default(property):
 				self.fdel(instance)
 			if self.name in getattr(instance, "__dict__", ()):
 				del instance.__dict__[self.name]
+
+	@classmethod
+	def isDefault(cls, instance, name):
+		return not Default.isSet(instance, name)
+	
+	@classmethod
+	def isSet(cls, instance, name):
+		return name in instance.__dict__
+
+class ClassDefault(Default):
+	def __get__(self, instance: _INSTANCE, owner: type[_INSTANCE] | None = None) -> _PROP_VALUE:
+		if instance is None:
+			return self.fget(owner)
+		else:
+			return super().__get__(instance, owner=owner)
+
+class CachedDefault(Default):
+	
+	@property
+	def fget(self):
+		return self._fget_wrapper
+	
+	@fget.setter
+	def fget(self, value):
+		self._fget = value
+	
+	def __delete__(self, instance):
+		with self.locks[id(self)]:
+			super().__delete__(instance)
 			if f"_default_{self.name}" in getattr(instance, "__dict__", ()):
 				del instance.__dict__[f"_default_{self.name}"]
+
+	def _fget_wrapper(self, instance):
+		with self.locks[id(self)]:
+			from GeekyGadgets.Functions import forceHash, getAttrChain
+			from GeekyGadgets.Threads import current_thread
+
+			if not self.deps:
+				if self.name in instance.__dict__:
+					return instance.__dict__[self.name]
+				elif f"_default_{self.name}" not in instance.__dict__:
+					instance.__dict__[f"_default_{self.name}"] = self._fget(instance)
+				return instance.__dict__[f"_default_{self.name}"]
+			elif f"_default_{self.name}" in instance.__dict__:
+				prevHash, value = instance.__dict__[f"_default_{self.name}"]
+				if prevHash is None:
+					try:
+						instance.__dict__[f"_default_{self.name}"] = (forceHash(tuple(getAttrChain(instance, dep) for dep in self.deps)), value)
+					except CachedDefaultCodependent:
+						pass
+					finally:
+						ret = value
+				elif prevHash == (currentHash := forceHash(tuple(getAttrChain(instance, dep) for dep in self.deps))):
+					ret = value
+				else:
+					try:
+						ret = self._fget(instance)
+					except Exception as e:
+						getattr(instance, "LOG", LOGGER).exception(e)
+						self.TRACE[current_thread()].discard(self.name)
+						raise e
+					instance.__dict__[f"_default_{self.name}"] = (currentHash, ret)
+			else:
+				try:
+					ret = self._fget(instance)
+				except Exception as e:
+					getattr(instance, "LOG", LOGGER).exception(e)
+					self.TRACE[current_thread()].discard(self.name)
+					raise e
+				try:
+					currentHash = forceHash(tuple(getAttrChain(instance, dep) for dep in self.deps))
+				except CachedDefaultCodependent:
+					currentHash = None
+				instance.__dict__[f"_default_{self.name}"] = (currentHash, ret)
+			
+			return ret
+
+	@classmethod
+	def willDefault(cls : "type[CachedDefault]", instance, name):
+		return not cls.isSet(instance, name) and f"_default_{name}" not in instance.__dict__
+
+	@classmethod
+	def hasDefaulted(cls : "type[CachedDefault]", instance, name):
+		return not cls.isSet(instance, name) and f"_default_{name}" in instance.__dict__
+
+class CachedClassDefault(ClassDefault, CachedDefault): ...
 
 class ClassProperty:
 	"""Similar to `builtins.property` but will generate the callback-returned value when accessed through the class 
@@ -195,7 +322,7 @@ class ClassProperty:
 		self.__doc__ = doc if doc else fget.__doc__
 	
 	def __get__(self, instance, owner=None):
-		return self.fget(instance or owner)
+		return self.fget(instance if instance is not None else owner)
 	
 	def __set__(self, instance, value):
 		self.fset(instance, value)
@@ -273,11 +400,10 @@ class CachedClassProperty:
 	def __repr__(self):
 		return f"{object.__repr__(self)[:-1]} name={self.name!r}>"
 
-def threaded(func : function, groupCls : "type[ThreadGroup]"=None):
+def threaded(func : function, groupCls : "type[_Groups.ThreadGroup]"=None):
 
-	from GeekyGadgets.Threads.Groups import ThreadGroup
-	from GeekyGadgets.Threads.Thread import Thread, Future
-	groupCls = groupCls or ThreadGroup
+	from GeekyGadgets.Threads import Thread, Future
+	groupCls = groupCls or _Groups.ThreadGroup
 	if "." in func.__qualname__:
 		ownerName = func.__qualname__.split(".")[-2]
 	else:
@@ -320,8 +446,8 @@ def threaded(func : function, groupCls : "type[ThreadGroup]"=None):
 	return _thread_launcher_wrapper
 
 try:
-	from GeekyGadgets.Threads.Synch import LockedDict, RLock
-	from GeekyGadgets.Threads.Thread import Thread, Future
-	from GeekyGadgets.Threads.Groups import ThreadGroup
+	import GeekyGadgets.Threads.Synch as _Synch
+	import GeekyGadgets.Threads.Thread as _Thread
+	import GeekyGadgets.Threads.Groups as _Groups
 except ImportError:
 	pass

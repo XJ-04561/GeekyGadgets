@@ -1,8 +1,8 @@
 
 from types import TracebackType
 from GeekyGadgets.Globals import *
-from GeekyGadgets.Classy import Default
-from GeekyGadgets.Threads import RLock, Thread, DummyThread
+from GeekyGadgets.Classy import Default, CachedDefault
+import GeekyGadgets.Threads as _Threads
 from GeekyGadgets.SpecialTypes import LimitedList
 from GeekyGadgets.Functions import swapAttr
 
@@ -13,7 +13,7 @@ _T = TypeVar("_T")
 
 class RePrinter:
 
-	LOCK : RLock = RLock()
+	LOCK : _Threads.RLock = _Threads.RLock()
 
 	@Default["out"]
 	def supportsColor(self):
@@ -192,8 +192,8 @@ class LocalIO(list, IO):
 	
 	size : int = property(lambda self: sum(map(len, self)))
 	closed = False
-	coupled : Thread = DummyThread()
-	streamLock : RLock = Default(lambda self:RLock())
+	coupled : _Threads.Thread = Default(lambda self:_Threads.DummyThread())
+	streamLock : _Threads.RLock = CachedDefault(lambda self:_Threads.RLock())
 
 	def read(self, n: int = -1) -> tuple[AnyStr]:
 		with self.streamLock:
@@ -232,11 +232,10 @@ class LocalIO(list, IO):
 		readableIO.close()
 
 	def couple(self, readableIO : IO, /):
-		from GeekyGadgets.Threads import Thread
 		if "b" in readableIO.mode:
-			self.coupled = Thread(target=self._read_loop, args=(TextIOWrapper(readableIO, errors="backslashreplace"), ))
+			self.coupled = _Threads.Thread(target=self._read_loop, args=(TextIOWrapper(readableIO, errors="backslashreplace"), ))
 		else:
-			self.coupled = Thread(target=self._read_loop, args=(readableIO,))
+			self.coupled = _Threads.Thread(target=self._read_loop, args=(readableIO,))
 		self.coupled.start()
 
 class LocalBufferIO(LimitedList, LocalIO):
@@ -278,11 +277,11 @@ class LocalBufferIO(LimitedList, LocalIO):
 	# 	readableIO.close()
 	
 	# def couple(self, readableIO : IO, /):
-	# 	from GeekyGadgets.Threads import Thread
+	# 	from GeekyGadgets.Threads import _Threads.Thread
 	# 	if "b" in readableIO.mode:
-	# 		self.coupled = Thread(target=self._read_loop, args=(TextIOWrapper(readableIO, errors="backslashreplace"), ))
+	# 		self.coupled = _Threads.Thread(target=self._read_loop, args=(TextIOWrapper(readableIO, errors="backslashreplace"), ))
 	# 	else:
-	# 		self.coupled = Thread(target=self._read_loop, args=(readableIO,))
+	# 		self.coupled = _Threads.Thread(target=self._read_loop, args=(readableIO,))
 	# 	self.coupled.start()
 
 class ReplaceIO(IO):

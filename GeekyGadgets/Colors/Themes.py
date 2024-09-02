@@ -1,6 +1,6 @@
 
 from GeekyGadgets.Colors.Globals import *
-from GeekyGadgets.Classy import Default
+from GeekyGadgets.Classy import Default, CachedDefault
 
 __all__ = ("Theme", "AnsiTheme")
 

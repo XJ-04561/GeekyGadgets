@@ -1,48 +1,147 @@
 
-from collections.abc import Iterable
-from typing import Any, SupportsIndex
-from GeekyGadgets.Globals import *
-from GeekyGadgets.Threads import RLock
-from GeekyGadgets.Classy import Default
-from GeekyGadgets.Iterators import Chain
+import GeekyGadgets.Globals as _GL
+from dataclasses import dataclass
 
-__all__ = ("LimitedDict",)
+import GeekyGadgets.Threads as _Threads
+import GeekyGadgets.Functions as _Funcs
 
-_NOT_SET = object()
-_DEFAULT_LIMIT = 10000
-_T = TypeVar("_T")
-_F = TypeVar("_F")
-_S = TypeVar("_S")
+__all__ = (
+	"Percent", "Pair", "Freezer",
+	"Spaces", "LinkedSpace", "NameSpace", "NullSpace", "HybridSpace",
+	"LimitedIterable", "LimitedList", "LimitedDict", "LimitedSet"
+)
 
-def useLock(func : Callable):
+_T = _GL.TypeVar("_T")
+_F = _GL.TypeVar("_F")
+_S = _GL.TypeVar("_S")
+
+def useLock(func : _GL.Callable):
 	def _func_wrapper(self, *args, **kwargs):
 		with self._lock:
 			return func(self, *args, **kwargs)
-	update_wrapper(_func_wrapper, func)
+	_GL.update_wrapper(_func_wrapper, func)
 	_func_wrapper.usesLock = True
 	return _func_wrapper
 
-def preShave(func : Callable):
+def preShave(func : _GL.Callable):
 	def _func_wrapper(self, *args, **kwargs):
 		# print(_func_wrapper, func, id(_func_wrapper), id(func), self, args, kwargs)
 		self.shave()
 		return func(self, *args, **kwargs)
-	update_wrapper(_func_wrapper, func)
+	_GL.update_wrapper(_func_wrapper, func)
 	_func_wrapper.shaves = True
 	return _func_wrapper
 
-def postShave(func : Callable):
+def postShave(func : _GL.Callable):
 	def _func_wrapper(self, *args, **kwargs):
 		# print(_func_wrapper, func, id(_func_wrapper), id(func), self, args, kwargs)
 		ret = func(self, *args, **kwargs)
 		self.shave()
 		return ret
-	update_wrapper(_func_wrapper, func)
+	_GL.update_wrapper(_func_wrapper, func)
 	_func_wrapper.shaves = True
 	return _func_wrapper
 
+class HashedSet(set):
+	
+	_lock : _Threads.RLock
+	_hash : int
+
+	def __new__(cls, *args, **kwargs):
+		obj = super().__new__(cls, *args, **kwargs)
+		obj._lock = _Threads.RLock()
+		return obj
+	
+	def __hash__(self):
+		return self._hash
+
+	def add(self, element: _GL.Any) -> _GL.NoneType:
+		with self._lock:
+			super().add(element)
+			self._hash = _Funcs.forceHash(self)
+
+	def discard(self, element: _GL.Any) -> _GL.NoneType:
+		with self._lock:
+			super().discard(element)
+			self._hash = _Funcs.forceHash(self)
+	
+	def remove(self, element: _GL.Any) -> _GL.NoneType:
+		with self._lock:
+			super().remove(element)
+			self._hash = _Funcs.forceHash(self)
+	
+	def clear(self) -> _GL.NoneType:
+		with self._lock:
+			super().clear()
+			self._hash = _Funcs.forceHash(self)
+	
+	def update(self, *s: _GL.Iterable) -> _GL.NoneType:
+		with self._lock:
+			super().update(*s)
+			self._hash = _Funcs.forceHash(self)
+	
+	def difference_update(self, *s: _GL.Iterable[_GL.Any]) -> _GL.NoneType:
+		with self._lock:
+			super().difference_update(*s)
+			self._hash = _Funcs.forceHash(self)
+	
+	def intersection_update(self, *s: _GL.Iterable[_GL.Any]) -> _GL.NoneType:
+		with self._lock:
+			super().intersection_update(*s)
+			self._hash = _Funcs.forceHash(self)
+	
+	def symmetric_difference_update(self, s: _GL.Iterable) -> _GL.NoneType:
+		with self._lock:
+			super().symmetric_difference_update(s)
+			self._hash = _Funcs.forceHash(self)
+
+HashedSet._hash = hash(HashedSet)
+
+class Percent:
+	
+	def __new__(cls, value : _GL.Number) -> None:
+		if isinstance(value, cls):
+			return super().__new__(cls, value.value)
+		else:
+			return super().__new__(cls, value)
+
+	def __str__(self):
+		return str(100 * float(self)) + "%"
+	
+	def __format__(self, format_spec: str) -> str:
+		return format(100 * float(self), format_spec) + "%"
+	
+	def __add__(self, value: float) -> "Percent":
+		return type(self)(self.value + value)
+	def __radd__(self, value: float) -> "Percent":
+		return type(self)(value + self.value)
+	def __mul__(self, value: float) -> "Percent":
+		return type(self)(self.value * value)
+	def __rmul__(self, value: float) -> "Percent":
+		return type(self)(value * self.value)
+	def __truediv__(self, value: float) -> "Percent":
+		return type(self)(self.value / value)
+	def __rtruediv__(self, value: float) -> "Percent":
+		return type(self)(value / self.value)
+	def __floordiv__(self, value: float) -> "Percent":
+		return type(self)(((100 * self.value) // value) / 100)
+	def __rfloordiv__(self, value: float) -> "Percent":
+		return type(self)((value // (100 * self.value)) / 100)
+	def __mod__(self, value: float) -> "Percent":
+		return type(self)(self.value % value)
+	def __rmod__(self, value: float) -> "Percent":
+		return type(self)(value % self.value)
+	def __pow__(self, value: float) -> "Percent":
+		return type(self)(self.value ** value)
+	def __rpow__(self, value: float) -> "Percent":
+		return type(self)(value ** self.value)
+	
+	def __abs__(self) -> "Percent":
+		return type(self)(abs(self.value))
+_GL.Number.register(Percent)
+
 class Pair(tuple):
-	def __new__(cls, iterable: Iterable[_F,_S] = ...) -> "Pair[_F,_S]":
+	def __new__(cls, iterable: _GL.Iterable[_F,_S] = ...) -> "Pair[_F,_S]":
 		iterable = tuple(iterable)
 		if len(iterable) == 2:
 			return super().__new__(cls, iterable)
@@ -68,32 +167,32 @@ class Freezer:
 		from GeekyGadgets.Threads import current_thread
 		del self._freezers[current_thread()]
 
-class Spaces(ABC):
+class Spaces(_GL.ABC):
 
-	@abstractmethod
-	def __getattribute__(self, name: str) -> Any:
+	@_GL.abstractmethod
+	def __getattribute__(self, name: str) -> _GL.Any:
 		return super().__getattribute__(name)
-	@abstractmethod
-	def __setattr__(self, name: str, value: Any) -> None:
+	@_GL.abstractmethod
+	def __setattr__(self, name: str, value: _GL.Any) -> None:
 		return super().__setattr__(name, value)
-	@abstractmethod
+	@_GL.abstractmethod
 	def __getitem__(self, key: str):
 		return super().__getitem__(key)
-	@abstractmethod
-	def __setitem__(self, key: str, value: Any):
+	@_GL.abstractmethod
+	def __setitem__(self, key: str, value: _GL.Any):
 		return super().__setitem__(key, value)
 	
-	def __iter__(self : "_D[_V]") -> "Generator[tuple[str,_V]]":
+	def __iter__(self : "_D[_V]") -> "_GL.Generator[tuple[str,_V]]":
 		for name, value in dict.items(self):
 			yield (name, value)
 
-_V = TypeVar("_V")
-_D = TypeVar("_D", bound=Spaces)
+_V = _GL.TypeVar("_V")
+_D = _GL.TypeVar("_D", bound=Spaces)
 
 class LinkedSpace(Spaces):
 
 	def __init__(self, source : object, /):
-		SETATTR(self, "__source__", source)
+		_GL.SETATTR(self, "__source__", source)
 	
 	def __getitem__(self, key):
 		return getattr(self, key)
@@ -102,21 +201,21 @@ class LinkedSpace(Spaces):
 		return setattr(self, key, value)
 	
 	def __contains__(self, name):
-		return hasattr(GETATTR(self, "__source__"), name)
+		return hasattr(_GL.GETATTR(self, "__source__"), name)
 
-	def __getattribute__(self, name: str) -> Any:
-		return getattr(GETATTR(self, "__source__"), name)
+	def __getattribute__(self, name: str) -> _GL.Any:
+		return getattr(_GL.GETATTR(self, "__source__"), name)
 	
-	def __setattr__(self, name: str, value : Any) -> None:
-		return setattr(GETATTR(self, "__source__"), name, value)
+	def __setattr__(self, name: str, value : _GL.Any) -> None:
+		return setattr(_GL.GETATTR(self, "__source__"), name, value)
 
 class NameSpace(dict, Spaces):
 
-	@overload
+	@_GL.overload
 	def __init__(self, /, **kwargs): ...
-	@overload
-	def __init__(self, iterable : Iterable[tuple[str,Any]]|dict|None, /, **kwargs): ...
-	def __init__(self, iterable : Iterable[tuple[str,Any]]|dict|None=None, /, **kwargs):
+	@_GL.overload
+	def __init__(self, iterable : _GL.Iterable[tuple[str,_GL.Any]]|dict|None, /, **kwargs): ...
+	def __init__(self, iterable : _GL.Iterable[tuple[str,_GL.Any]]|dict|None=None, /, **kwargs):
 		
 		if iterable is None:
 			super().__init__(**kwargs)
@@ -127,88 +226,96 @@ class NameSpace(dict, Spaces):
 		return " ".join(map("{0[0]}={0[1]!r}".format, self))
 
 	def __getitem__(self, key):
-		ret = dict.get(self, key, NULL)
-		if ret is NULL:
-			raise NameError(f"{self!r} has no entry named {key!r}")
+		ret = dict.get(self, key, _GL.NULL)
+		if ret is _GL.NULL:
+			raise KeyError(f"{self!r} has no entry named {key!r}")
 		return ret
 	
 	def __setitem__(self, key, value) -> None:
 		dict.__setitem__(self, key, value)
 	
-	def __getattribute__(self, name: str) -> Any:
+	def __getattribute__(self, name: str) -> _GL.Any:
 		if name.startswith("_"):
-			return object.__getattribute__(self, name)
-		else:
+			return super().__getattribute__(name)
+		try:
 			return self[name]
+		except KeyError as e:
+			try:
+				return super().__getattribute__(name)
+			except AttributeError:
+				raise e
 	
-	def __setattr__(self, name: str, value : Any) -> None:
+	def __setattr__(self, name: str, value : _GL.Any) -> None:
 		self[name] = value
+
+@dataclass(init=False, frozen=True)
+class ImmutableNameSpace(NameSpace): ...
 
 class NullSpace(Spaces):
 
-	def __getattribute__(self, name: str) -> Any:
-		return NULL
+	def __getattribute__(self, name: str) -> _GL.Any:
+		return _GL.NULL
 	
-	def __setattr__(self, name: str, value: Any) -> None:
+	def __setattr__(self, name: str, value: _GL.Any) -> None:
 		pass
 	
-	def __getitem__(self, key: Any) -> Any:
-		return NULL
+	def __getitem__(self, key: _GL.Any) -> _GL.Any:
+		return _GL.NULL
 	
-	def __setitem__(self, key: Any, value: Any) -> None:
+	def __setitem__(self, key: _GL.Any, value: _GL.Any) -> None:
 		pass
 
 class HybridSpace(NameSpace, LinkedSpace):
 	
 	__link_spaces__ : list[LinkedSpace]
 
-	@overload
+	@_GL.overload
 	def __init__(self, /, **kwargs): ...
-	@overload
+	@_GL.overload
 	def __init__(self, source : object, /, **kwargs): ...
-	@overload
-	def __init__(self, source : object, iterable : Iterable, /, **kwargs): ...
+	@_GL.overload
+	def __init__(self, source : object, iterable : _GL.Iterable, /, **kwargs): ...
 	def __init__(self, source : object=None, iterable=None, /, **kwargs):
-		SETATTR(self, "__link_spaces__", [LinkedSpace(self, source)] if source is not None else [])
+		_GL.SETATTR(self, "__link_spaces__", [LinkedSpace(self, source)] if source is not None else [])
 		NameSpace.__init__(self, iterable, **kwargs)
 
 	def __getitem__(self, key):
-		ret = dict.get(self, key, NULL)
-		if ret is NULL:
-			for ls in reversed(GETATTR(self, "__link_spaces__")):
+		ret = dict.get(self, key, _GL.NULL)
+		if ret is _GL.NULL:
+			for ls in reversed(_GL.GETATTR(self, "__link_spaces__")):
 				if key in ls:
 					return ls[key]
 		return ret
 	
-	def __getattribute__(self, name: str) -> Any:
-		ret = dict.get(self, name, NULL)
-		if ret is NULL:
-			for ls in reversed(GETATTR(self, "__link_spaces__")):
+	def __getattribute__(self, name: str) -> _GL.Any:
+		ret = dict.get(self, name, _GL.NULL)
+		if ret is _GL.NULL:
+			for ls in reversed(_GL.GETATTR(self, "__link_spaces__")):
 				if name in ls:
 					return ls[name]
 		return ret
 	
-	def __or__(self, iterable : Iterable) -> "HybridSpace":
+	def __or__(self, iterable : _GL.Iterable) -> "HybridSpace":
 		if isinstance(iterable, NameSpace):
 			for name, value in dict.items(iterable):
 				self[name] = value
 		elif isinstance(iterable, LinkedSpace):
-			GETATTR(self, "__link_spaces__").append(iterable)
+			_GL.GETATTR(self, "__link_spaces__").append(iterable)
 		elif isinstance(iterable, dict):
 			for name, value in iterable.items():
 				self[name] = value
-		elif isinstance(iterable, Iterable):
+		elif isinstance(iterable, _GL.Iterable):
 			for name, value in iterable:
 				self[name] = value
 		else:
 			return NotImplemented
 		return self
 	
-	def __ior__(self, iterable : Iterable) -> "HybridSpace":
+	def __ior__(self, iterable : _GL.Iterable) -> "HybridSpace":
 		return self | iterable
 
 
-class LimitedIterable(Subscriptable):
+class LimitedIterable(_GL.Subscriptable):
 	"""An iterable type that imposes a size-limit on its instances, or instances of its subclasses. It and 
 	its subclasses uses the method `shave` to correct the iterable. `shave` in turn uses the method `shift` to remove 
 	an item, the property `size` to check the size of the iterable instance, and the attribute `LIMIT` 
@@ -222,18 +329,18 @@ class LimitedIterable(Subscriptable):
 	
 	LIMIT : int
 	
-	_lock : RLock = cached_property(lambda self: RLock())
+	_lock : _Threads.RLock = _GL.cached_property(lambda self: _Threads.RLock())
 
 	size : int = property(len)
 	
-	@overload
+	@_GL.overload
 	def __init__(self, /): ...
-	@overload
+	@_GL.overload
 	def __init__(self, /, *, limit : int=10000): ...
-	@overload
-	def __init__(self, iterable : Iterable, /): ...
-	@overload
-	def __init__(self, iterable : Iterable, /, *, limit : int=10000): ...
+	@_GL.overload
+	def __init__(self, iterable : _GL.Iterable, /): ...
+	@_GL.overload
+	def __init__(self, iterable : _GL.Iterable, /, *, limit : int=10000): ...
 	@postShave
 	def __init__(self, *args, limit : int=10000, **kwargs):
 		self.LIMIT = limit
@@ -259,7 +366,7 @@ class LimitedIterable(Subscriptable):
 			else:
 				raise TypeError(f"Can't remove first element of {self} as it does not implement `remove` or `pop`")
 
-	@final
+	@_GL.final
 	def shave(self) -> int:
 		"""Checks `self.size` and removes elements until it is within the set `LIMIT`. Returns the difference in 
 		`self.size` from before until return.
@@ -277,15 +384,15 @@ class LimitedList(LimitedIterable, list):
 		return self.pop(0)
 
 	@postShave
-	def append(self, object: Any) -> None:
+	def append(self, object: _GL.Any) -> None:
 		return super().append(object)
 	
 	@postShave
-	def extend(self, iterable: Iterable) -> None:
+	def extend(self, iterable: _GL.Iterable) -> None:
 		return super().extend(iterable)
 	
 	@postShave
-	def insert(self, index: SupportsIndex, object: Any) -> None:
+	def insert(self, index: _GL.SupportsIndex, object: _GL.Any) -> None:
 		return super().insert(index, object)
 
 class LimitedDict(LimitedIterable, dict):
@@ -298,21 +405,21 @@ class LimitedDict(LimitedIterable, dict):
 				raise KeyError(f"{self} is empty.")
 
 	@postShave
-	def setdefault(self: "LimitedDict", key: Any, default: Any=None, /) -> Any:
+	def setdefault(self: "LimitedDict", key: _GL.Any, default: _GL.Any=None, /) -> _GL.Any:
 		return super().setdefault(key, default)
 	
-	@overload
-	def update(self: dict, m: Mapping, /, **kwargs: Any) -> None: ...
-	@overload
-	def update(self: dict, m: Iterable[tuple], /, **kwargs: Any) -> None: ...
-	@overload
-	def update(self: dict, **kwargs: Any) -> None: ...
+	@_GL.overload
+	def update(self: dict, m: _GL.Mapping, /, **kwargs: _GL.Any) -> None: ...
+	@_GL.overload
+	def update(self: dict, m: _GL.Iterable[tuple], /, **kwargs: _GL.Any) -> None: ...
+	@_GL.overload
+	def update(self: dict, **kwargs: _GL.Any) -> None: ...
 	@postShave
 	def update(self, m, /, **kwargs):
 		return super().update(m, **kwargs)
 
 	@postShave
-	def __setitem__(self, key: Any, value: Any) -> None:
+	def __setitem__(self, key: _GL.Any, value: _GL.Any) -> None:
 		return super().__setitem__(key, value)
 
 class LimitedSet(LimitedIterable, set):
@@ -322,21 +429,21 @@ class LimitedSet(LimitedIterable, set):
 		return out
 
 	@postShave
-	def add(self, element: Any) -> None:
+	def add(self, element: _GL.Any) -> None:
 		return super().add(element)
 	
 	@postShave	
-	def update(self, *s: Iterable) -> None:
+	def update(self, *s: _GL.Iterable) -> None:
 		return super().update(*s)
 	
 	@postShave	
-	def difference_update(self, *s: Iterable[Any]) -> None:
+	def difference_update(self, *s: _GL.Iterable[_GL.Any]) -> None:
 		return super().difference_update(*s)
 
 	@postShave
-	def intersection_update(self, *s: Iterable[Any]) -> None:
+	def intersection_update(self, *s: _GL.Iterable[_GL.Any]) -> None:
 		return super().intersection_update(*s)
 
 	@postShave
-	def symmetric_difference_update(self, s: Iterable) -> None:
+	def symmetric_difference_update(self, s: _GL.Iterable) -> None:
 		return super().symmetric_difference_update(s)

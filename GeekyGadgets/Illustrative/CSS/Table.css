@@ -1,0 +1,42 @@
+
+figure.IllustrativeTable {
+	padding : 1em;
+
+	& > * {
+		margin-left : 1em;
+		margin-right : 1em;
+	}
+	& > h2 {
+		text-align : center;
+	}
+	& > p {
+		text-align : center;
+	}
+	& > table {
+		width : calc(100% - 2em);
+		overflow-y : scroll;
+
+		& > th {
+			word-wrap: break-word;
+			vertical-align: middle;
+			text-wrap: wrap;
+			text-align: left;
+			padding-left : 1em;
+
+			& > h2 {
+				text-align: center;
+				margin-bottom: 0;
+			}
+		}
+		& > tbody td {
+			word-wrap: break-word;
+			vertical-align: top;
+			text-wrap: balance;
+			text-align: left;
+			padding-left : 0.2cm;
+		}
+	}
+}
+.CollectionViewer aside > nav .IllustrativeTable {
+	font-size : 30%;
+}

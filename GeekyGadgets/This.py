@@ -124,11 +124,11 @@ class ThisContainer:
 	def add(self, value):
 		self.values[id(value)] = value
 
-class Function:
+class ThisFunction:
 
 	__callback__ : Callable
 	__argname__ : str = "this"
-	self : "Function"
+	self : "ThisFunction"
 	values : dict[int,Any]
 	def __init__(self, container : ThisContainer):
 		
@@ -162,7 +162,7 @@ class Function:
 		return ast.unparse(self.tree)
 	
 	def __repr__(self):
-		return f"<This.Function ({self.__argname__}): return {self.__expr__} at {hex(id(self))}>"
+		return f"<This.ThisFunction ({self.__argname__}): return {self.__expr__} at {hex(id(self))}>"
 	
 	def __call__(self, this): return self.__callback__(this)
 
@@ -174,9 +174,9 @@ class ThisBase:
 		self.container = ThisContainer()
 
 	def __iter__(self):
-		yield Function(container(self))
+		yield ThisFunction(container(self))
 	def __next__(self):
-		return Function(container(self))
+		return ThisFunction(container(self))
 	
 	def __repr__(self):
 		return f"<{ast.unparse(container(self).nodeTree)} at {hex(id(self))}>"

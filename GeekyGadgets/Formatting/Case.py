@@ -1,35 +1,47 @@
 
 
 from GeekyGadgets.Globals import *
+
 from GeekyGadgets.This import this
 
-screamingSnakeCase : re.Pattern = re.compile("^[A-Z_][A-Z_0-9]*$")
-snakeCase : re.Pattern= re.compile("^[a-z_][a-z_0-9]*$")
-camelCase : re.Pattern= re.compile("^[_]*[a-z][a-zA-Z0-9]*[_]*$")
-pascalCase : re.Pattern= re.compile("^[_]*[A-Z][a-zA-Z0-9]*[_]*$")
-kebabCase : re.Pattern= re.compile("^[a-z][a-z0-9-]*$")
+screamingSnakeCase : re.Pattern = re.compile(r"^[A-Z_:.][A-Z_0-9:.]*$")
+snakeCase : re.Pattern = re.compile(r"^[a-z_:.][a-z_0-9:.]*$")
+camelCase : re.Pattern = re.compile(r"^[_]*[a-z:.][a-zA-Z0-9:.]*[_]*$")
+pascalCase : re.Pattern = re.compile(r"^[_]*[A-Z:.][a-zA-Z0-9:.]*[_]*$")
+kebabCase : re.Pattern = re.compile(r"^[a-z:.][a-z0-9:.-]*$")
+titleCase : re.Pattern = re.compile(r"^(([A-Z0-9_:.-][a-z0-9_:.-]{3,}|[A-z0-9_:.-]{1,3})|\s)+$")
+sentenceCase : re.Pattern = re.compile(r"(((^|[.])\s+[A-Z0-9_:.-][a-z0-9_:.-]*|[A-z0-9_:.-])|\s)+$")
 
-CASES = [screamingSnakeCase, snakeCase, camelCase, pascalCase, kebabCase]
+camelKiller : re.Pattern = re.compile(r"(?<=[a-z0-9])(?=[A-Z0-9])")
+pascalKiller : re.Pattern = re.compile(r"(?<=[a-z0-9])(?=[A-Z0-9])|(?<=[A-Z0-9])(?=[A-Z0-9]+(?!$))")
+snakeKiller : re.Pattern = re.compile(r"[_]")
+kebabKiller : re.Pattern = re.compile(r"[-]")
+titleKiller : re.Pattern = re.compile(r"[ ,-]+")
+sentenceKiller : re.Pattern = re.compile(r"\s+")
 
-# camelKiller : re.Pattern= re.compile(r"([A-Z]+(?:[A-Z]|$|[_])|[A-Z][a-z0-9]+|^[a-z][a-z0-9]*|[a-z0-9]+)")
-# pascalKiller : re.Pattern= re.compile(r"[A-Z0-9][a-z0-9]+|[A-Z0-9]+|[a-z0-9]+")
-# snakeKiller : re.Pattern= re.compile(r"([^_]+)")
-# kebabKiller : re.Pattern= re.compile(r"([^-]+)")
+NAME_KILLER : re.Pattern = re.compile(r"([:.])")
 
-camelKiller : re.Pattern= re.compile(r"(?<=[a-z0-9])(?=[A-Z0-9])")
-pascalKiller : re.Pattern= re.compile(r"(?<=[a-z0-9])(?=[A-Z0-9])|(?<=[A-Z0-9])(?=[A-Z0-9]+(?!$))")
-snakeKiller : re.Pattern= re.compile(r"[_]")
-kebabKiller : re.Pattern= re.compile(r"[-]")
+CASES = {
+	"ScreamingSnakeCase" : (screamingSnakeCase, snakeKiller),
+	"SnakeCase" : (snakeCase, snakeKiller),
+	"CamelCase" : (camelCase, camelKiller),
+	"PascalCase" : (pascalCase, pascalKiller),
+	"KebabCase" : (kebabCase, kebabKiller),
+	"TitleCase" : (titleCase, titleKiller),
+	"SentenceCase" : (sentenceCase, sentenceKiller),
+}
 
-CASE_KILLERS = [snakeKiller, snakeKiller, camelKiller, pascalKiller, kebabKiller]
+CASE_KILLERS = [snakeKiller, snakeKiller, camelKiller, pascalKiller, kebabKiller, titleKiller]
 
-class Case(str):
-	def __new__(cls, name : str):
-		for case, caseKiller in zip(CASES, CASE_KILLERS):
-			if case.fullmatch(name):
-				words = caseKiller.split(name)
-				break
-		return super().__new__(str, cls.join(words))
+class Case:
+	def __new__(cls, fullname : str):
+		for caseName, (casePat, caseKiller) in CASES.items():
+			if casePat.fullmatch(fullname):
+				if cls.__name__ != caseName:
+					return "".join(cls.join(caseKiller.split(name)) if name not in ":." else name for name in NAME_KILLER.split(fullname))
+				else:
+					break
+		return str(fullname)
 
 class ScreamingSnakeCase(Case):
 	@staticmethod
@@ -55,6 +67,16 @@ class KebabCase(Case):
 	@staticmethod
 	def join(words : list[str]):
 		return "-".join(map(str.lower, words))
+
+class TitleCase(Case):
+	@staticmethod
+	def join(words : list[str]):
+		return " ".join(map(lambda x:x.capitalize() if len(x) > 3 else x.lower(), words))
+
+class SentenceCase(Case):
+	@staticmethod
+	def join(words : list[str]):
+		return f"{' '.join([words[0].capitalize() if words[0][1:].islower() else words[0]]+words[1:])}{'.' if words[-1].strip()[-1] != '.' else ''}"
 
 # def camel2snake(string : str):
 # 	return "_".join(camelKiller.findall(string))

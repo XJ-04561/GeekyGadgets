@@ -1,6 +1,6 @@
 
 from GeekyGadgets.Threads.Globals import *
-from GeekyGadgets.Classy import ClassProperty
+import GeekyGadgets.Classy as _Classy
 from GeekyGadgets.Threads.Thread import Thread
 
 __all__ = ("ThreadsMeta", "set_profile", "get_profile", "set_trace_function",
@@ -17,7 +17,7 @@ class ThreadsMeta:
 		return set_profile(func)
 	
 	
-	@ClassProperty
+	@_Classy.ClassProperty
 	def getProfile(self):
 		return get_profile()
 	
@@ -26,23 +26,23 @@ class ThreadsMeta:
 	def setTraceFunction(func):
 		return set_trace_function(func)
 	
-	@ClassProperty
+	@_Classy.ClassProperty
 	def getTraceFunction(self):
 		return get_trace_function()
 	
-	@ClassProperty
+	@_Classy.ClassProperty
 	def currentThread(self) -> Thread:
 		return current_thread()
 	
-	@ClassProperty
+	@_Classy.ClassProperty
 	def activeCount(self) -> int:
 		return active_count()
 	
-	@ClassProperty
+	@_Classy.ClassProperty
 	def threads(self) -> list[Thread]:
 		return enumerate_threads()
 	
-	@ClassProperty
+	@_Classy.ClassProperty
 	def mainThread(self) -> Thread:
 		return main_thread()
 	

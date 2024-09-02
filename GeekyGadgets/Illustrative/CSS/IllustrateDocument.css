@@ -1,0 +1,62 @@
+
+:root {
+	--DOCUMENT-PAGE-MARGIN : 2cm;
+}
+
+.GeekyIllustration body {
+	min-height: 100vh;
+	width: 100vw;
+	margin : 0;
+	padding : 0;
+	border : none;
+	border-radius : none;
+	box-shadow : none;
+	font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+	&:has(>header.FixedHeader) {
+		min-height: calc(100vh - 6em);
+		height: calc(100vh - 6em);
+		margin-top : 6em;
+	}
+	& > header.FixedHeader {
+		position : fixed;
+		left : 0;
+		right : 0;
+		top : 0;
+		height : 6em;
+		display : flex;
+		justify-content: flex-start;
+		align-items: baseline;
+		gap: 1em;
+		padding : 0 6em;
+		border-left: none;
+		border-top: none;
+		border-right: none;
+	}
+	& > main {
+		margin : 0 auto;
+		width: 100%;
+		background-color: var(--PAGE-BACKGROUND);
+
+		& > section:not(.MonoFigure) {
+			margin : 1cm auto;
+			position : relative;
+			display : flex;
+			flex-direction : column;
+			justify-content: flex-start;
+			justify-items: left;
+			padding : var(--DOCUMENT-PAGE-MARGIN) var(--DOCUMENT-PAGE-MARGIN);
+			width : calc(21cm - 4cm);
+			height : calc(29.7cm - 4cm);
+
+			/* border-radius: calc(var(--DOCUMENT-PAGE-MARGIN) / 4); */
+		}
+		& > section.FrontPage {
+			justify-items: center;
+			text-align : center;
+		}
+	}
+	& figure {
+		overflow: hidden;
+	}
+}
+

@@ -1,5 +1,6 @@
 
 from GeekyGadgets.Iterators import *
+from GeekyGadgets.Iterators.Walkers import *
 from GeekyGadgets.Formatting import *
 
 import pytest
@@ -62,7 +63,7 @@ def test_branches_walker():
 			data.append(createTree(5))
 			for z in range(5):
 				data.append(createTree(4))
-	iterator = BranchesWalker(iterable)
+	iterator = BagWalker(iterable)
 
 	for item, expected in zip(iterator, data):
 		print(item, expected)
@@ -139,7 +140,7 @@ def test_leaves_walker():
 			return [createTree(N-1) for i in range(N)]
 	iterable = createTree(7)
 	data = [i for _ in range(7) for _ in range(6) for _ in range(5) for i in range(4)]
-	iterator = LeavesWalker(iterable)
+	iterator = ItemWalker(iterable)
 
 	for item, expected in zip(iterator, data):
 		print(item, expected)

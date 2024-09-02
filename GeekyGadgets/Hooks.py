@@ -1,11 +1,13 @@
 
 from GeekyGadgets.Globals import *
-from GeekyGadgets.Logging import Logged
-from GeekyGadgets.Functions import forceHash
-from GeekyGadgets.Iterators import TakeWhile
-import itertools
-from GeekyGadgets.Threads import Thread, current_thread
+
 from queue import Queue, Empty as EmptyQueueException
+
+from GeekyGadgets.Logging import Logged
+from GeekyGadgets.Functions import * # forceHash
+import GeekyGadgets.Iterators as _Iterators
+import GeekyGadgets.Threads as _Threads
+
 
 __all__ = ("HookBaitingException", "Hook", "DummyHooks", "Hooks", "Bait", "GlobalHooks")
 
@@ -35,7 +37,7 @@ class DummyHooks:
 
 	_eventQueue : Queue[tuple[str,dict]]
 	_hooks : dict[str, set[Hook]]
-	_worker : Thread
+	_worker : _Threads.Thread
 	RUNNING : bool
 
 	def addHook(self, category : str, /, target : Callable, args : tuple=(), kwargs : dict={}) -> Hook:
@@ -63,14 +65,14 @@ class Hooks(Logged):
 
 	_eventQueue : Queue[tuple[str,dict]]
 	_hooks : dict[str, set[Hook]]
-	_worker : Thread
+	_worker : _Threads.Thread
 	RUNNING : bool
 
 	def __init__(self):
 		self._hooks = {}
 		self._eventQueue = Queue()
 		self.RUNNING = True
-		self._worker = Thread(target=self.mainLoop, daemon=True)
+		self._worker = _Threads.Thread(target=self.mainLoop, daemon=True)
 		self._worker.start()
 	
 	def __del__(self):
@@ -123,7 +125,7 @@ class Hooks(Logged):
 			try:
 				category, eventInfo = self._eventQueue.get(timeout=2)
 				if self._hooks.get(category): 
-					for hook in TakeWhile(lambda x:self.RUNNING, self._hooks.get(category, [])):
+					for hook in _Iterators.TakeWhile(lambda x:self.RUNNING, self._hooks.get(category, [])):
 						try:
 							hook(eventInfo)
 						except Exception as e:
@@ -136,9 +138,9 @@ class Hooks(Logged):
 				pass
 			except Exception as e:
 				if hasattr(e, "add_note"):
-					e.add_note(f"This exception occurred in hooks thread '{getattr(current_thread(), 'name', 'N/A')}'")
+					e.add_note(f"This exception occurred in hooks thread '{getattr(_Threads.current_thread(), 'name', 'N/A')}'")
 				self.LOG.exception(e)
-		self.LOG.info(f"Hooks thread {getattr(current_thread(), 'name', 'N/A')} stopped running")
+		self.LOG.info(f"Hooks thread {getattr(_Threads.current_thread(), 'name', 'N/A')} stopped running")
 
 
 class Bait(Logged):
